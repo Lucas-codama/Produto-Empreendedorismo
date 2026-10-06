@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Verifique a acessibilidade de documentos e slides. Revise os apontamentos e ajuste seu material.">
+<title>Entrelinhas — Acessibilidade de documentos</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml"><link rel="preload" href="/assets/fredoka.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="/styles.css"><script defer src="/app.js"></script><script type="module" src="/scene.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Pular para o conteúdo</a>
+<header class="site-header">
+<a class="brand" href="/" aria-label="Entrelinhas, início"><img src="/icon.svg" alt="" width="36" height="36"><span>entrelinhas<span class="brand-dot">.</span></span></a>
+<nav class="main-nav" aria-label="Navegação principal"><button id="new-material" class="nav active" aria-current="page">Analisar</button><button id="history-button" class="nav">Histórico</button></nav>
+<button id="motion-button" class="motion-button" aria-label="Pausar animações" aria-pressed="false" title="Pausar animações"><span aria-hidden="true">Ⅱ</span></button>
+</header>
+<main id="main" tabindex="-1">
+<div class="page-controls" id="page-controls" hidden><button id="go-back" class="back-button" aria-label="Voltar à página anterior"><span aria-hidden="true">←</span> Voltar</button></div>
+<section id="upload-view">
+<div id="start-panel" class="hero">
+<div class="hero-copy">
+<div class="eyebrow"><span class="tiny-star" aria-hidden="true">✳</span> Documentos & slides</div>
+<h1>Analise seu<br><span>material.</span></h1>
+<div id="dropzone" class="upload-area">
+<label class="upload-cta" for="file-input"><span>Escolher arquivo</span><span class="cta-arrow" aria-hidden="true">↗</span><input id="file-input" type="file" accept=".pdf,.docx,.pptx,.png,.jpg,.jpeg" aria-label="Escolher arquivo" aria-describedby="file-help"></label>
+<p id="file-help">PDF · Word · PowerPoint · Imagens<br><span>Até 20 MB · ou arraste o arquivo aqui</span></p>
+</div>
+<button id="demo-button" class="example-button">Abrir um exemplo <span aria-hidden="true">↗</span></button>
+</div>
+<div class="hero-art" id="hero-art" aria-hidden="true">
+<div class="art-halo"></div>
+<div class="paper-fallback"><div class="fallback-sheet back"></div><div class="fallback-sheet middle"></div><div class="fallback-sheet front"><span>Aa</span><i></i><i></i><i></i><b>✳</b></div></div>
+<canvas id="document-scene"></canvas>
+<span class="art-spark spark-one">✳</span><span class="art-spark spark-two">✦</span>
+
+</div>
+<div class="hero-foot"><span class="hero-line"></span><span>entrelinhas</span><span class="hero-line"></span></div>
+</div>
+<section id="context-panel" class="context-panel" hidden aria-labelledby="context-heading">
+<button id="back-upload" class="text-button back-link">← Trocar arquivo</button>
+<div class="context-layout">
+<div class="context-intro"><span class="eyebrow">Antes de analisar</span><h1>Para quem<br>é o material?</h1><div class="selected-file"><span aria-hidden="true">↗</span><strong id="file-label"></strong></div><p>Informe as necessidades e os recursos que o estudante utiliza.</p></div>
+<form id="material-form" class="context-card">
+<h2 id="context-heading" class="sr-only">Contexto do material</h2>
+<div class="field-row"><label>Disciplina<input name="discipline" id="discipline" placeholder="Ex.: Geografia" required maxlength="3000"></label><label>Atividade<select name="activity" id="activity" required><option value="">Selecione</option><option>Prova ou avaliação</option><option>Atividade de sala</option><option>Tarefa de casa</option><option>Material de estudo</option><option>Apresentação de aula</option></select></label></div>
+<label>Necessidades do estudante<textarea name="needs" id="needs" rows="3" required maxlength="3000" placeholder="Ex.: leitura ampliada e descrição de gráficos"></textarea></label>
+<label>Tecnologias assistivas<input name="technology" id="technology" required maxlength="3000" placeholder="Ex.: NVDA, ampliador de tela ou linha Braille"></label>
+<label class="font-preference">Fonte preferida <span class="optional">opcional</span><div class="unit-input"><input name="min_font" id="min-font" type="number" min="6" max="96" step="0.5" placeholder="20"><span>pt</span></div></label>
+<button type="submit" class="primary" id="analyze-button">Analisar material <span aria-hidden="true">↗</span></button>
+</form>
+</div>
+</section>
+</section>
+<section id="history-view" class="history-view" hidden aria-labelledby="history-title">
+<div class="history-heading"><div><div class="eyebrow">Seus materiais</div><h1 id="history-title">Histórico<span>.</span></h1></div><div class="history-actions"><button id="history-clear" class="secondary" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></svg>Limpar histórico</button><button id="history-new" class="primary">Nova análise <span aria-hidden="true">↗</span></button></div></div>
+<div id="history-feedback" class="history-feedback" hidden><span id="history-status" role="status"></span><button id="history-undo" class="text-button" hidden>Desfazer</button></div>
+<div class="history-table-head" aria-hidden="true"><span>Material</span><span>Versão / Data</span><span></span></div>
+<div id="recent-list" class="recent-list"></div>
+</section>
+<section id="result-view" hidden>
+<div class="result-heading"><div class="result-identity"><div class="analysis-emblem" aria-hidden="true"><i></i><i></i><i><span>Aa</span><b>✳</b></i></div><div class="result-name"><div class="eyebrow">Revisão do material</div><h1 id="result-title"></h1><p id="result-context"></p></div></div><div class="result-actions"><button id="reading-button" class="secondary">Texto para leitura</button><button id="upload-revision" class="secondary">Nova versão</button><a id="download-material" class="primary" href="#">Baixar material <span aria-hidden="true">↗</span></a></div></div>
+<div class="stats" id="stats"></div><div id="comparison" class="comparison" hidden></div>
+<div class="result-toolbar"><div class="tabs" role="tablist" aria-label="Modo de revisão"><button role="tab" id="tab-side" aria-controls="review-panel" aria-selected="true" data-mode="side">Lado a lado</button><button role="tab" id="tab-step" aria-controls="review-panel" aria-selected="false" tabindex="-1" data-mode="step">Passo a passo</button></div><div class="review-tools"><button id="assist-button" class="secondary small">Ajustes sugeridos <span aria-hidden="true">↗</span></button></div></div>
+<div class="result-content" id="review-panel" role="tabpanel" aria-labelledby="tab-side"></div>
+</section>
+<div id="message" class="message" role="alert" hidden></div>
+</main>
+<div id="page-transition" class="page-transition" hidden aria-hidden="true"><div id="portal-stage" class="portal-stage"><div id="portal-fallback" class="portal-fallback"><span>Aa</span><i></i><i></i><b>✳</b></div></div><div id="portal-veil" class="portal-veil"></div></div>
+<div class="busy-overlay" id="busy" hidden><div class="busy-card" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span><h2 id="busy-title">Analisando o material</h2></div></div>
+<dialog id="dialog" aria-labelledby="dialog-title"><div class="dialog-heading"><h2 id="dialog-title"></h2><button id="close-dialog" class="icon-button" aria-label="Fechar janela">×</button></div><div id="dialog-body"></div></dialog>
+<input type="file" id="revision-input" accept=".pdf,.docx,.pptx,.png,.jpg,.jpeg" hidden>
+<div class="sr-only" id="live" role="status" aria-live="polite"></div>
+</body></html>

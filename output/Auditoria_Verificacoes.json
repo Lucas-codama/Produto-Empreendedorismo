@@ -1,0 +1,521 @@
+{
+  "engine_version": 7,
+  "cases": [
+    {
+      "case": "PDF branco sobre amarelo",
+      "expected": "Contraste 1,07:1 e fonte de 11 pt abaixo de 20 pt.",
+      "status": "CONFIRMADO",
+      "fixture": "C:\\Users\\Lucas\\Documents\\Produto Empreendedorismo\\entrelinhas\\.runtime\\audit-fixtures\\branco-amarelo.pdf",
+      "measured": {
+        "text": 1,
+        "contrast": 1,
+        "font": 1,
+        "images": 0,
+        "unknown_contrast": 0,
+        "unknown_font": 0,
+        "estimated_contrast": 0
+      },
+      "findings": [
+        {
+          "rule": "pdf_structure",
+          "severity": "attention",
+          "evidence": ""
+        },
+        {
+          "rule": "contrast",
+          "severity": "attention",
+          "evidence": "#FFFFFF sobre #FFFF00: 1.07:1. Referência: 4.5:1."
+        },
+        {
+          "rule": "font_size",
+          "severity": "attention",
+          "evidence": "Menor fonte identificada: 11 pt. Preferência: 20 pt."
+        }
+      ]
+    },
+    {
+      "case": "PDF preto sobre amarelo",
+      "expected": "Não emitir alerta de contraste.",
+      "status": "CONFIRMADO",
+      "fixture": "C:\\Users\\Lucas\\Documents\\Produto Empreendedorismo\\entrelinhas\\.runtime\\audit-fixtures\\preto-amarelo.pdf",
+      "measured": {
+        "text": 1,
+        "contrast": 1,
+        "font": 1,
+        "images": 0,
+        "unknown_contrast": 0,
+        "unknown_font": 0,
+        "estimated_contrast": 0
+      },
+      "findings": [
+        {
+          "rule": "pdf_structure",
+          "severity": "attention",
+          "evidence": ""
+        },
+        {
+          "rule": "font_size",
+          "severity": "attention",
+          "evidence": "Menor fonte identificada: 11 pt. Preferência: 20 pt."
+        }
+      ]
+    },
+    {
+      "case": "Fonte no limite individual",
+      "expected": "20 pt não fica abaixo da preferência de 20 pt.",
+      "status": "CONFIRMADO",
+      "fixture": "C:\\Users\\Lucas\\Documents\\Produto Empreendedorismo\\entrelinhas\\.runtime\\audit-fixtures\\fonte-20.pdf",
+      "measured": {
+        "text": 1,
+        "contrast": 1,
+        "font": 1,
+        "images": 0,
+        "unknown_contrast": 0,
+        "unknown_font": 0,
+        "estimated_contrast": 0
+      },
+      "findings": [
+        {
+          "rule": "pdf_structure",
+          "severity": "attention",
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "case": "Sem preferência individual",
+      "expected": "Não inventar um tamanho mínimo.",
+      "status": "CONFIRMADO",
+      "fixture": "C:\\Users\\Lucas\\Documents\\Produto Empreendedorismo\\entrelinhas\\.runtime\\audit-fixtures\\branco-amarelo.pdf",
+      "measured": {
+        "text": 1,
+        "contrast": 1,
+        "font": 0,
+        "images": 0,
+        "unknown_contrast": 0,
+        "unknown_font": 0,
+        "estimated_contrast": 0
+      },
+      "findings": [
+        {
+          "rule": "pdf_structure",
+          "severity": "attention",
+          "evidence": ""
+        },
+        {
+          "rule": "contrast",
+          "severity": "attention",
+          "evidence": "#FFFFFF sobre #FFFF00: 1.07:1. Referência: 4.5:1."
+        }
+      ]
+    },
+    {
+      "case": "PDF com degradê escuro e texto preto",
+      "expected": "Medir o fundo renderizado e detectar baixo contraste.",
+      "status": "CONFIRMADO",
+      "fixture": "C:\\Users\\Lucas\\Documents\\Produto Empreendedorismo\\entrelinhas\\.runtime\\audit-fixtures\\degrade-escuro.pdf",
+      "measured": {
+        "text": 2,
+        "contrast": 2,
+        "font": 2,
+        "images": 0,
+        "unknown_contrast": 0,
+        "unknown_font": 0,
+        "estimated_contrast": 2
+      },
+      "findings": [
+        {
+          "rule": "pdf_structure",
+          "severity": "attention",
+          "evidence": ""
+        },
+        {
+          "rule": "contrast",
+          "severity": "attention",
+          "evidence": "#000000 sobre #040404: 1.02:1. Referência: 4.5:1. Medição da imagem renderizada; contraste estimado, confira o resultado."
+        },
+        {
+          "rule": "contrast",
+          "severity": "attention",
+          "evidence": "#000000 sobre #080808: 1.05:1. Referência: 4.5:1. Medição da imagem renderizada; contraste estimado, confira o resultado."
+        },
+        {
+          "rule": "font_size",
+          "severity": "attention",
+          "evidence": "Menor fonte identificada: 11 pt. Preferência: 20 pt."
+        },
+        {
+          "rule": "font_size",
+          "severity": "attention",
+          "evidence": "Menor fonte identificada: 11 pt. Preferência: 20 pt."
+        }
+      ]
+    },
+    {
+      "case": "PDF com cor CMYK",
+      "expected": "Converter pela renderização do PDF e detectar baixo contraste.",
+      "status": "CONFIRMADO",
+      "fixture": "C:\\Users\\Lucas\\Documents\\Produto Empreendedorismo\\entrelinhas\\.runtime\\audit-fixtures\\cmyk.pdf",
+      "measured": {
+        "text": 1,
+        "contrast": 1,
+        "font": 1,
+        "images": 0,
+        "unknown_contrast": 0,
+        "unknown_font": 0,
+        "estimated_contrast": 1
+      },
+      "findings": [
+        {
+          "rule": "pdf_structure",
+          "severity": "attention",
+          "evidence": ""
+        },
+        {
+          "rule": "contrast",
+          "severity": "attention",
+          "evidence": "#D1D2D4 sobre #FCFCFC: 1.47:1. Referência: 4.5:1. Medição da imagem renderizada; contraste estimado, confira o resultado."
+        },
+        {
+          "rule": "font_size",
+          "severity": "attention",
+          "evidence": "Menor fonte identificada: 11 pt. Preferência: 20 pt."
+        }
+      ]
+    },
+    {
+      "case": "PDF digitalizado",
+      "expected": "Reconhecer texto localmente e estimar contraste. Ativação depende da instalação do Tesseract.",
+      "status": "ATIVAÇÃO PENDENTE",
+      "fixture": "C:\\Users\\Lucas\\Documents\\Produto Empreendedorismo\\entrelinhas\\.runtime\\audit-fixtures\\digitalizado.pdf",
+      "measured": {
+        "text": 0,
+        "contrast": 0,
+        "font": 0,
+        "images": 1,
+        "unknown_contrast": 0,
+        "unknown_font": 0,
+        "estimated_contrast": 0
+      },
+      "findings": [
+        {
+          "rule": "pdf_structure",
+          "severity": "attention",
+          "evidence": ""
+        },
+        {
+          "rule": "image_only",
+          "severity": "attention",
+          "evidence": ""
+        },
+        {
+          "rule": "image_review",
+          "severity": "review",
+          "evidence": ""
+        },
+        {
+          "rule": "ocr_unavailable",
+          "severity": "review",
+          "evidence": "Reconhecimento local de texto indisponível neste computador."
+        }
+      ]
+    },
+    {
+      "case": "JPG com texto",
+      "expected": "Reconhecer texto localmente e estimar contraste; conferir transcrição. Ativação depende da instalação do Tesseract.",
+      "status": "ATIVAÇÃO PENDENTE",
+      "fixture": "C:\\Users\\Lucas\\Documents\\Produto Empreendedorismo\\entrelinhas\\.runtime\\audit-fixtures\\imagem.jpg",
+      "measured": {
+        "text": 0,
+        "contrast": 0,
+        "font": 0,
+        "images": 1,
+        "unknown_contrast": 0,
+        "unknown_font": 0,
+        "estimated_contrast": 0
+      },
+      "findings": [
+        {
+          "rule": "image_review",
+          "severity": "review",
+          "evidence": ""
+        },
+        {
+          "rule": "ocr_unavailable",
+          "severity": "review",
+          "evidence": "Reconhecimento local de texto indisponível neste computador."
+        }
+      ]
+    },
+    {
+      "case": "PDF com árvore de tags vazia",
+      "expected": "Detectar erro objetivo de árvore vazia e texto não associado à estrutura.",
+      "status": "CONFIRMADO",
+      "fixture": "C:\\Users\\Lucas\\Documents\\Produto Empreendedorismo\\entrelinhas\\.runtime\\audit-fixtures\\tags-vazias.pdf",
+      "measured": {
+        "text": 1,
+        "contrast": 1,
+        "font": 1,
+        "images": 0,
+        "unknown_contrast": 0,
+        "unknown_font": 0,
+        "estimated_contrast": 0
+      },
+      "findings": [
+        {
+          "rule": "pdf_language_missing",
+          "severity": "attention",
+          "evidence": "Entrada /Lang ausente no catálogo."
+        },
+        {
+          "rule": "pdf_tags_empty",
+          "severity": "attention",
+          "evidence": "Existe StructTreeRoot, mas nenhum elemento de estrutura foi encontrado."
+        },
+        {
+          "rule": "pdf_text_untagged",
+          "severity": "attention",
+          "evidence": "Página 1: caracteres sem MCID de estrutura identificado."
+        },
+        {
+          "rule": "contrast",
+          "severity": "attention",
+          "evidence": "#FFFFFF sobre #FFFF00: 1.07:1. Referência: 4.5:1."
+        },
+        {
+          "rule": "font_size",
+          "severity": "attention",
+          "evidence": "Menor fonte identificada: 11 pt. Preferência: 20 pt."
+        },
+        {
+          "rule": "pdf_structure_review",
+          "severity": "review",
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "case": "alt-ausente",
+      "expected": "Detectar alt_missing; não certificar o sentido da imagem.",
+      "status": "CONFIRMADO",
+      "fixture": "C:\\Users\\Lucas\\Documents\\Produto Empreendedorismo\\entrelinhas\\.runtime\\audit-fixtures\\alt-ausente.docx",
+      "measured": {
+        "text": 0,
+        "contrast": 0,
+        "font": 0,
+        "images": 1,
+        "unknown_contrast": 0,
+        "unknown_font": 0,
+        "estimated_contrast": 0
+      },
+      "findings": [
+        {
+          "rule": "alt_missing",
+          "severity": "attention",
+          "evidence": "Descrição alternativa ausente nos metadados."
+        }
+      ]
+    },
+    {
+      "case": "alt-generico",
+      "expected": "Detectar alt_placeholder; não certificar o sentido da imagem.",
+      "status": "CONFIRMADO",
+      "fixture": "C:\\Users\\Lucas\\Documents\\Produto Empreendedorismo\\entrelinhas\\.runtime\\audit-fixtures\\alt-generico.docx",
+      "measured": {
+        "text": 0,
+        "contrast": 0,
+        "font": 0,
+        "images": 1,
+        "unknown_contrast": 0,
+        "unknown_font": 0,
+        "estimated_contrast": 0
+      },
+      "findings": [
+        {
+          "rule": "alt_placeholder",
+          "severity": "attention",
+          "evidence": "imagem_12.png"
+        }
+      ]
+    },
+    {
+      "case": "alt-falso",
+      "expected": "Detectar alt_quality; não certificar o sentido da imagem.",
+      "status": "CONFERÊNCIA DO PROFESSOR",
+      "fixture": "C:\\Users\\Lucas\\Documents\\Produto Empreendedorismo\\entrelinhas\\.runtime\\audit-fixtures\\alt-falso.docx",
+      "measured": {
+        "text": 0,
+        "contrast": 0,
+        "font": 0,
+        "images": 1,
+        "unknown_contrast": 0,
+        "unknown_font": 0,
+        "estimated_contrast": 0
+      },
+      "findings": [
+        {
+          "rule": "alt_quality",
+          "severity": "review",
+          "evidence": "Descrição propositalmente falsa: um cachorro azul."
+        }
+      ]
+    },
+    {
+      "case": "Imagem marcada decorativa",
+      "expected": "Respeitar o marcador sem pedir descrição; intenção ainda é humana.",
+      "status": "CONFIRMADO",
+      "fixture": "C:\\Users\\Lucas\\Documents\\Produto Empreendedorismo\\entrelinhas\\.runtime\\audit-fixtures\\decorativa.docx",
+      "measured": {
+        "text": 0,
+        "contrast": 0,
+        "font": 0,
+        "images": 1,
+        "unknown_contrast": 0,
+        "unknown_font": 0,
+        "estimated_contrast": 0
+      },
+      "findings": []
+    },
+    {
+      "case": "DOCX com problema apenas no cabeçalho",
+      "expected": "Medir texto do cabeçalho e detectar contraste e fonte pequena.",
+      "status": "CONFIRMADO",
+      "fixture": "C:\\Users\\Lucas\\Documents\\Produto Empreendedorismo\\entrelinhas\\.runtime\\audit-fixtures\\cabecalho.docx",
+      "measured": {
+        "text": 2,
+        "contrast": 2,
+        "font": 2,
+        "images": 0,
+        "unknown_contrast": 0,
+        "unknown_font": 0,
+        "estimated_contrast": 0
+      },
+      "findings": [
+        {
+          "rule": "contrast",
+          "severity": "attention",
+          "evidence": "#FFFFFF sobre #FFFFFF: 1.00:1. Referência: 4.5:1."
+        },
+        {
+          "rule": "font_size",
+          "severity": "attention",
+          "evidence": "Menor fonte identificada: 8 pt. Preferência: 20 pt."
+        }
+      ]
+    },
+    {
+      "case": "DOCX com padrão de sombreamento sólido",
+      "expected": "Não usar incorretamente a cor de preenchimento branca como fundo.",
+      "status": "CONFIRMADO",
+      "fixture": "C:\\Users\\Lucas\\Documents\\Produto Empreendedorismo\\entrelinhas\\.runtime\\audit-fixtures\\sombreamento-solid.docx",
+      "measured": {
+        "text": 1,
+        "contrast": 1,
+        "font": 1,
+        "images": 0,
+        "unknown_contrast": 0,
+        "unknown_font": 0,
+        "estimated_contrast": 0
+      },
+      "findings": [
+        {
+          "rule": "contrast",
+          "severity": "attention",
+          "evidence": "#000000 sobre #000000: 1.00:1. Referência: 3:1."
+        }
+      ]
+    },
+    {
+      "case": "PPTX título reservado",
+      "expected": "Reconhecer o espaço reservado; caixa comum não confirma título semântico.",
+      "status": "CONFIRMADO",
+      "fixture": "C:\\Users\\Lucas\\Documents\\Produto Empreendedorismo\\entrelinhas\\.runtime\\audit-fixtures\\titulo-real.pptx",
+      "measured": {
+        "text": 1,
+        "contrast": 0,
+        "font": 1,
+        "images": 0,
+        "unknown_contrast": 1,
+        "unknown_font": 0,
+        "estimated_contrast": 0
+      },
+      "findings": [
+        {
+          "rule": "contrast_unknown",
+          "severity": "review",
+          "evidence": "1 trechos sem cálculo confiável no documento."
+        }
+      ]
+    },
+    {
+      "case": "PPTX título em caixa comum",
+      "expected": "Reconhecer o espaço reservado; caixa comum não confirma título semântico.",
+      "status": "CONFIRMADO",
+      "fixture": "C:\\Users\\Lucas\\Documents\\Produto Empreendedorismo\\entrelinhas\\.runtime\\audit-fixtures\\titulo-caixa.pptx",
+      "measured": {
+        "text": 1,
+        "contrast": 0,
+        "font": 1,
+        "images": 0,
+        "unknown_contrast": 1,
+        "unknown_font": 0,
+        "estimated_contrast": 0
+      },
+      "findings": [
+        {
+          "rule": "font_size",
+          "severity": "attention",
+          "evidence": "Menor fonte identificada: 18 pt. Preferência: 20 pt."
+        },
+        {
+          "rule": "contrast_unknown",
+          "severity": "review",
+          "evidence": "1 trechos sem cálculo confiável no documento."
+        },
+        {
+          "rule": "slide_title",
+          "severity": "review",
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "case": "Correção real de contraste em DOCX",
+      "expected": "Cor gravada e baixo contraste desaparece; conteúdo preservado.",
+      "status": "CONFIRMADO",
+      "fixture": "C:\\Users\\Lucas\\Documents\\Produto Empreendedorismo\\entrelinhas\\.runtime\\audit-fixtures\\cor-corrigida.docx",
+      "measured": {
+        "text": 1,
+        "contrast": 1,
+        "font": 1,
+        "images": 0,
+        "unknown_contrast": 0,
+        "unknown_font": 0,
+        "estimated_contrast": 0
+      },
+      "findings": [
+        {
+          "rule": "font_size",
+          "severity": "attention",
+          "evidence": "Menor fonte identificada: 10 pt. Preferência: 20 pt."
+        }
+      ]
+    },
+    {
+      "case": "Correção real de fonte e original preservado",
+      "expected": "Fonte de 20 pt salva; original permanece em 10 pt.",
+      "status": "CONFIRMADO",
+      "fixture": "C:\\Users\\Lucas\\Documents\\Produto Empreendedorismo\\entrelinhas\\.runtime\\audit-fixtures\\fonte-corrigida.docx",
+      "measured": {
+        "text": 1,
+        "contrast": 1,
+        "font": 1,
+        "images": 0,
+        "unknown_contrast": 0,
+        "unknown_font": 0,
+        "estimated_contrast": 0
+      },
+      "findings": []
+    }
+  ]
+}
