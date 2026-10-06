@@ -109,6 +109,34 @@ textarea{resize:vertical;min-height:94px}
 .empty-state{padding:35px;border-radius:22px}
 .busy-overlay{background:#30213c55;backdrop-filter:blur(12px)}.busy-card{border-radius:28px;background:var(--canvas);padding:44px}.busy-card h2{font:500 25px Fredoka}
 .spinner{border-color:#d8ccec;border-top-color:var(--teal)}
+.analysis-success-icon{display:none;width:64px;height:64px;margin:auto;color:var(--teal)}
+.analysis-success-icon circle{fill:var(--pale);stroke:currentColor;stroke-width:1.5;stroke-opacity:.2}
+.analysis-success-icon path{fill:none;stroke:currentColor;stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:0}
+.analysis-success .analysis-success-icon{display:block}
+.analysis-success .spinner{display:none}
+.analysis-success .busy-card{padding:32px 40px;border:1px solid var(--line);min-width:min(300px,calc(100vw - 40px))}
+.analysis-success .busy-card h2{font-size:23px;margin:18px 0 0}
+.example-loading-art,.example-progress{display:none}
+.busy-overlay.example-loading{background:#f7f3edc9;backdrop-filter:blur(16px)}
+.example-loading .spinner{display:none}
+.example-loading .busy-card{width:min(360px,calc(100vw - 40px));padding:35px 34px 32px;border:1px solid var(--line);box-shadow:0 25px 70px #5739b81a;overflow:hidden}
+.example-loading .busy-card h2{margin:23px 0 20px;font-size:25px}
+.example-loading .example-loading-art{display:block;position:relative;height:130px;width:120px;margin:0 auto;perspective:500px}
+.example-loading-art i{position:absolute;width:83px;height:110px;left:18px;top:10px;border-radius:14px;background:#ed986f;transform:rotate(13deg) translate(10px,3px);box-shadow:0 5px 12px #5739b818}
+.example-loading-art i:nth-child(2){background:#c7aff3;transform:rotate(4deg) translate(3px,1px)}
+.example-loading-art i:last-child{background:#fffaf4;transform:rotate(-9deg);color:#6844c2;display:flex;flex-direction:column;padding:13px;animation:example-paper-float 1.8s var(--ease) infinite alternate}
+.example-loading-art b{font:500 30px Fredoka;line-height:1}
+.example-loading-art span{height:4px;background:#d6c8eb;border-radius:5px;margin-top:9px;width:100%}
+.example-loading-art span+span{margin-top:5px;width:76%}
+.example-loading-art em{font-size:29px;line-height:1;color:#eb936d;font-style:normal;margin-top:9px}
+.example-loading .example-progress{display:block;height:5px;background:var(--pale);border-radius:8px;overflow:hidden}
+.example-progress span{display:block;background:var(--teal);border-radius:8px;height:100%;width:40%;animation:example-progress-slide 1.2s ease-in-out infinite}
+.example-ready .example-progress span{width:100%;animation:none;transform-origin:left}
+#result-view.example-arrival{animation:none!important}
+@keyframes example-progress-slide{0%{transform:translateX(-105%)}100%{transform:translateX(355%)}}
+@keyframes example-paper-float{from{transform:translateY(4px) rotate(-9deg)}to{transform:translateY(-5px) rotate(-5deg)}}
+.motion-paused .example-progress span{animation:none;width:100%;opacity:.65}
+@media(prefers-reduced-motion:reduce){.example-progress span{width:100%;opacity:.65}}
 dialog{border-radius:28px;padding:30px;background:#fffaf6}.dialog-heading h2{font:500 27px Fredoka}.icon-button{height:36px;width:36px}
 .message{position:fixed;bottom:24px;right:24px;max-width:min(550px,calc(100vw - 40px));z-index:80;background:#ffede2;color:var(--amber);padding:18px 24px;border:1px solid #c88d71;border-radius:18px;box-shadow:0 8px 30px #0002;font-size:14px}
 @keyframes enter{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}

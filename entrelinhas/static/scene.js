@@ -3,7 +3,7 @@ import * as THREE from './assets/three.module.js';
 // Decorative only: the upload and analysis work independently of WebGL.
 const host = document.getElementById('hero-art');
 const canvas = document.getElementById('document-scene');
-const paused = () => document.body.classList.contains('motion-paused');
+const paused = () => document.body.classList.contains('motion-paused') || document.body.classList.contains('theme-changing');
 try {
   const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.8));
@@ -67,8 +67,17 @@ try {
     card.position.set(x,y,z);card.rotation.z=angle;stack.add(card);cards.push(card);
   }
   stack.rotation.set(.14,-.35,0);
-  const floor=new THREE.Mesh(new THREE.PlaneGeometry(20,20),new THREE.ShadowMaterial({opacity:.14}));
-  floor.rotation.x=-Math.PI/2;floor.position.y=-2.7;floor.receiveShadow=true;scene.add(floor);
+  // Soft contact shadow: the projected silhouette made a hard grey stain
+  // outside the illustration, especially when revealing the light theme.
+  const shadowCanvas=document.createElement('canvas');shadowCanvas.width=256;shadowCanvas.height=256;
+  const shadowContext=shadowCanvas.getContext('2d');
+  const shadowGradient=shadowContext.createRadialGradient(128,128,12,128,128,128);
+  shadowGradient.addColorStop(0,'rgba(35,21,61,.16)');
+  shadowGradient.addColorStop(.45,'rgba(35,21,61,.08)');
+  shadowGradient.addColorStop(1,'rgba(35,21,61,0)');
+  shadowContext.fillStyle=shadowGradient;shadowContext.fillRect(0,0,256,256);
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(5.6,3.4),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(shadowCanvas),transparent:true,depthWrite:false}));
+  floor.rotation.x=-Math.PI/2;floor.position.y=-2.5;scene.add(floor);
   const bead=new THREE.Mesh(new THREE.SphereGeometry(.19,32,24),new THREE.MeshStandardMaterial({color:0xe77f58,metalness:.28,roughness:.28}));
   bead.position.set(-2,1.6,.25);bead.castShadow=true;scene.add(bead);
   const ring=new THREE.Mesh(new THREE.TorusGeometry(.33,.09,16,56),new THREE.MeshStandardMaterial({color:0x8061cc,roughness:.32,metalness:.15}));
@@ -138,6 +147,7 @@ try {
   new ResizeObserver(resize).observe(host);
   new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;sync();}).observe(host);
   document.addEventListener('entrelinhas-motion',sync);
+  document.addEventListener('entrelinhas-theme-motion',sync);
   document.addEventListener('visibilitychange',sync);
   canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();if(frame)cancelAnimationFrame(frame);host.classList.remove('ready');});
   resize();host.classList.add('ready');sync();

@@ -51,6 +51,39 @@ async function run(task, title) {
   try { return await task(); } catch (error) { message(error.message || 'Não foi possível concluir.'); return null; }
   finally { busy(false); }
 }
+async function completeAnalysis(next){
+  const overlay=$('busy'),icon=overlay.querySelector('.analysis-success-icon'),check=icon.querySelector('path');
+  const animations=new Set();
+  const allowed=()=>!motionPaused && !motionPreference.matches && !document.hidden;
+  const stop=()=>{if(!allowed())animations.forEach(animation=>animation.finish());};
+  const animate=async(element,frames,options)=>{
+    if(!allowed())return;
+    const animation=element.animate(frames,{fill:'forwards',...options});animations.add(animation);
+    try{await animation.finished;}catch(_){}
+  };
+  document.addEventListener('entrelinhas-motion',stop);document.addEventListener('visibilitychange',stop);motionPreference.addEventListener('change',stop);
+  try{
+    $('main').classList.add('portal-managed');
+    await showJob(next,false);
+    // Success means the analysis finished, including when it found barriers.
+    // Never show this confirmation after a failed request or before rendering.
+    overlay.classList.add('analysis-success');$('busy-title').textContent='Análise concluída';
+    window.scrollTo({top:0,behavior:'instant'});
+    await Promise.all([
+      animate(icon,[{opacity:0,transform:'scale(.88)'},{opacity:1,transform:'scale(1)'}],{duration:350,easing:'cubic-bezier(.22,1,.36,1)'}),
+      animate(check,[{strokeDashoffset:40},{strokeDashoffset:0}],{duration:350,easing:'ease-out'})
+    ]);
+    await Promise.all([
+      animate(overlay,[{opacity:1},{opacity:0}],{duration:220,easing:'ease-out'}),
+      animate($('result-view'),[{opacity:0,transform:'translateY(24px)'},{opacity:1,transform:'translateY(0)'}],{duration:360,easing:'cubic-bezier(.22,1,.36,1)'})
+    ]);
+    $('result-title').tabIndex=-1;$('result-title').focus({preventScroll:true});
+    return next;
+  }finally{
+    busy(false);animations.forEach(animation=>animation.cancel());overlay.classList.remove('analysis-success');
+    document.removeEventListener('entrelinhas-motion',stop);document.removeEventListener('visibilitychange',stop);motionPreference.removeEventListener('change',stop);
+  }
+}
 function context() {
   return {discipline:$('discipline').value.trim(), activity:$('activity').value,
     needs:$('needs').value.trim(), technology:$('technology').value.trim(), min_font:$('min-font').value || null};
@@ -386,10 +419,58 @@ $('dropzone').addEventListener('dragover',e=>{e.preventDefault();$('dropzone').c
 $('dropzone').addEventListener('dragleave',()=>$('dropzone').classList.remove('dragover'));
 $('dropzone').addEventListener('drop',e=>{e.preventDefault();$('dropzone').classList.remove('dragover');const f=e.dataTransfer.files[0];chooseFile(f);if(file===f){const dt=new DataTransfer();dt.items.add(f);$('file-input').files=dt.files;}});
 $('material-form').addEventListener('submit',async e=>{
-  e.preventDefault(); if(!file){message('Escolha um material para analisar.');return;}
-  await run(async()=>{const data=await encodeFile(file); await showJob(await api('/api/analyze',{filename:file.name,file:data,context:context()}));},'Analisando o material');
+  e.preventDefault(); if(!$('busy').hidden)return;if(!file){message('Escolha um material para analisar.');return;}
+  await run(async()=>{const data=await encodeFile(file); await completeAnalysis(await api('/api/analyze',{filename:file.name,file:data,context:context()}));},'Analisando o material');
 });
-$('demo-button').addEventListener('click',()=>run(async()=>{const j=await api('/api/demo',{});setContext(j.analysis.context);await showJob(j);},'Analisando uma atividade de exemplo'));
+let exampleOpening=false;
+async function openExample(){
+  if(exampleOpening || navigationInProgress)return;
+  exampleOpening=true;
+  const overlay=$('busy'),card=overlay.querySelector('.busy-card'),progress=$('example-progress');
+  const animations=new Set();
+  const allowed=()=>!motionPaused && !motionPreference.matches && !document.hidden;
+  const stop=()=>{if(!allowed())animations.forEach(animation=>animation.finish());};
+  const animate=async(element,frames,options)=>{
+    if(!allowed())return;
+    // Hold each endpoint until the whole transition is finished. Cancelling
+    // the shorter fade early restored the loading overlay's opacity to 1.
+    const animation=element.animate(frames,{fill:'forwards',...options});animations.add(animation);
+    try{await animation.finished;}catch(_){}
+  };
+  message('');overlay.classList.add('example-loading');progress.removeAttribute('aria-valuenow');
+  progress.setAttribute('aria-label','Carregando o exemplo');busy(true,'Abrindo o exemplo');
+  document.addEventListener('entrelinhas-motion',stop);document.addEventListener('visibilitychange',stop);motionPreference.addEventListener('change',stop);
+  try{
+    // The bar stays indeterminate while the server works; completion is only
+    // shown after the material and review are actually ready.
+    const [next]=await Promise.all([
+      api('/api/demo',{}),
+      animate(card,[{opacity:0,transform:'translateY(140px) rotate(4deg)'},{opacity:1,transform:'translateY(0) rotate(0deg)'}],{duration:430,easing:'cubic-bezier(.22,1,.36,1)'})
+    ]);
+    // This transition owns the entrance; suppress the ordinary entrance so
+    // it does not restart when the pull-up animation releases the element.
+    $('main').classList.add('portal-managed');
+    setContext(next.analysis.context);await showJob(next,false);
+    overlay.classList.add('example-ready');progress.setAttribute('aria-valuenow','100');progress.setAttribute('aria-label','Exemplo carregado');
+    $('busy-title').textContent='Pronto para revisar';
+    await animate(progress.firstElementChild,[{transform:'scaleX(.35)'},{transform:'scaleX(1)'}],{duration:230,easing:'ease-out'});
+    $('result-view').classList.add('example-arrival');
+    await Promise.all([
+      animate(overlay,[{opacity:1},{opacity:0}],{duration:300,easing:'ease-out'}),
+      animate($('result-view'),[{opacity:0,transform:'translateY(80px)'},{opacity:1,transform:'translateY(0)'}],{duration:560,easing:'cubic-bezier(.22,1,.36,1)'})
+    ]);
+    $('result-title').tabIndex=-1;$('result-title').focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});
+  }catch(error){message(error.message || 'Não foi possível abrir o exemplo.');}
+  finally{
+    // Hide first, then release the held animation styles; never expose the
+    // loading card again between the fade and the end of the result entrance.
+    busy(false);
+    animations.forEach(animation=>animation.cancel());
+    document.removeEventListener('entrelinhas-motion',stop);document.removeEventListener('visibilitychange',stop);motionPreference.removeEventListener('change',stop);
+    overlay.classList.remove('example-loading','example-ready');$('result-view').classList.remove('example-arrival');exampleOpening=false;
+  }
+}
+$('demo-button').addEventListener('click',openExample);
 $('new-material').addEventListener('click',reset);
 $('go-back').addEventListener('click',goBack);
 document.querySelector('.brand').addEventListener('click',e=>{e.preventDefault();reset();});
@@ -416,7 +497,7 @@ $('upload-revision').addEventListener('click',()=>$('revision-input').click());
 $('revision-input').addEventListener('change',async e=>{
   const revision=e.target.files[0];if(!revision)return;
   if(revision.size>20*1024*1024){message('O limite por material é de 20 MB.');return;}
-  await run(async()=>{const data=await encodeFile(revision);await showJob(await api('/api/analyze',{filename:revision.name,file:data,context:job.analysis.context,parent_id:job.id}));},'Verificando a versão reenviada');
+  await run(async()=>{const data=await encodeFile(revision);await completeAnalysis(await api('/api/analyze',{filename:revision.name,file:data,context:job.analysis.context,parent_id:job.id}));},'Verificando a versão reenviada');
   e.target.value='';
 });
 document.querySelector('.tabs').addEventListener('click',e=>{const b=e.target.closest('[data-mode]');if(b && b.dataset.mode!==mode)switchMode(b.dataset.mode);});

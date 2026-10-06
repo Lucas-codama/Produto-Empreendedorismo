@@ -84,7 +84,13 @@ Fredoka e Nunito são distribuídas sob a licença SIL Open Font License. Three.
 
 O botão de lua/sol no topo alterna os temas claro e escuro. A escolha fica salva no navegador; antes de uma escolha, o site acompanha a preferência do sistema. O tema é aplicado antes da primeira renderização. As cores do material em análise permanecem originais, inclusive na prévia do Word, para não esconder problemas de contraste.
 
+A troca manual revela o novo tema por uma onda de tinta que parte do botão, com pontas arredondadas e gotas absorvidas pela frente. Usa snapshots nativos quando disponíveis e uma onda pintada em canvas nos demais navegadores. A cena 3D pausa durante a troca para evitar saltos e usa uma sombra suave, sem a silhueta rígida no fundo. Pausa de animações, movimento reduzido, mudança de tamanho e interação com outros controles encerram a transição sem bloquear a interface.
+
 A revisão usa uma prancheta com sombras, folhas e animações leves. O histórico apresenta uma transição de aproximação e afastamento da cena 3D. Ao pausar animações ou preferir movimento reduzido, a navegação ocorre diretamente. A cobertura não é exibida como seção na interface; as verificações continuam funcionando no analisador.
+
+Ao abrir o exemplo, uma pequena pilha de folhas sobe com uma barra de carregamento. A barra permanece indeterminada durante a preparação e só indica conclusão quando a revisão estiver pronta. A análise entra de baixo, sem reiniciar a animação ao terminar. Pausa e movimento reduzido levam diretamente ao conteúdo.
+
+Ao concluir a análise de um envio ou de uma nova versão, aparece uma confirmação breve com um visto desenhado e “Análise concluída”. Ela confirma o fim do processamento, inclusive quando há barreiras encontradas. A revisão entra suavemente e o carregamento permanece invisível até a transição terminar. Erros não mostram a confirmação; pausa e movimento reduzido abrem diretamente o resultado.
 
 A transição da prancheta controla também a entrada das telas de destino, evitando sobreposição com outra animação de entrada. Na saída, a cena volta ao seu contêiner no mesmo quadro em que chega à posição final, sem pausa e nova animação. O caminho em CSS usa uma cópia do elemento de origem/destino quando WebGL não está disponível.
 

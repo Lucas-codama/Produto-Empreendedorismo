@@ -4,6 +4,17 @@ html{scrollbar-gutter:stable}
 .header-actions{display:flex;align-items:center;gap:10px}
 .theme-button svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .theme-sun{display:none}
+.theme-changing #theme-button{pointer-events:none}
+.theme-changing *, .theme-changing *::before,.theme-changing *::after{transition:none!important;animation-play-state:paused!important}
+.theme-changing .art-spark,.theme-changing .analysis-emblem,.theme-changing .empty-flower{animation-play-state:paused!important}
+.theme-fluid-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:250;pointer-events:none}
+::view-transition{pointer-events:none}
+::view-transition-group(root){animation:none}
+::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
+::view-transition-old(root){z-index:1}
+/* The new snapshot must start hidden, including the frame before JS installs
+   its animated mask. It is released only after the live theme is committed. */
+::view-transition-new(root){z-index:2;clip-path:circle(0px at var(--theme-origin-x,100%) var(--theme-origin-y,0px))}
 [data-theme=dark] .theme-moon{display:none}
 [data-theme=dark] .theme-sun{display:block}
 .portal-managed .hero-copy,.portal-managed .hero-art,.portal-managed .context-panel,.portal-managed .history-view,.portal-managed #result-view{animation:none!important;opacity:1;transform:none}
@@ -65,6 +76,9 @@ html{scrollbar-gutter:stable}
 [data-theme=dark] .message{background:#432c27;border-color:#a87259}
 [data-theme=dark] .busy-overlay{background:#100c17aa}
 [data-theme=dark] .spinner{border-color:#5c4771;border-top-color:#c3a8ff}
+[data-theme=dark] .busy-overlay.example-loading{background:#19151fce}
+[data-theme=dark] .example-loading .busy-card{background:#26202e;border-color:#4b3c58;box-shadow:0 25px 70px #0004}
+[data-theme=dark] .analysis-success .busy-card{background:#26202e;border-color:#4b3c58}
 [data-theme=dark] .skip{background:#26202e}
 [data-theme=dark] .trash-target span{color:#dbc4f5}
 [data-theme=dark] .trash-orbit{background:radial-gradient(circle,#6b438a70 0,transparent 72%)}
