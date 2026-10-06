@@ -200,14 +200,20 @@ function showHistory() {
   });
 }
 
+function paperSource() {
+  return !$('upload-view').hidden && !$('start-panel').hidden ? $('hero-art') : !$('result-view').hidden?document.querySelector('.analysis-emblem'):null;
+}
 function paperOrigin() {
-  const source = !$('upload-view').hidden && !$('start-panel').hidden ? $('hero-art') : document.querySelector('.analysis-emblem');
+  const source = paperSource();
   const r=source?.getBoundingClientRect();
   return r?.width && r?.height && r.bottom>0 && r.top<innerHeight ? {x:r.x,y:r.y,w:r.width,h:r.height} : {x:innerWidth*.58,y:innerHeight*.24,w:Math.min(innerWidth*.36,450),h:Math.min(innerHeight*.55,500)};
 }
 async function navigatePaper(direction, change) {
   if(navigationInProgress)return;
   if(motionPaused || motionPreference.matches){await change();return;}
+  // The portal owns the entrance. A second CSS entrance moves its destination
+  // while it is being measured and restarts the paper after the handoff.
+  $('main').classList.add('portal-managed');
   navigationInProgress=true;document.body.classList.add('is-navigating');
   $('main').setAttribute('aria-busy','true');
   let changed=false, changePromise;
@@ -223,21 +229,24 @@ async function navigatePaper(direction, change) {
     $('main').removeAttribute('aria-busy');navigationInProgress=false;
   }
 }
-async function paperFallback({direction,origin,covered}) {
+async function paperFallback({direction,origin,getOrigin,covered}) {
   const overlay=$('page-transition'),stage=$('portal-stage'),veil=$('portal-veil');
   overlay.hidden=false;stage.classList.add('css-portal');
-  const start={left:origin.x+'px',top:origin.y+'px',width:origin.w+'px',height:origin.h+'px',transform:'rotate(-9deg) scale(.72)'},end={left:'0px',top:'0px',width:innerWidth+'px',height:innerHeight+'px',transform:'rotate(0deg) scale(1.15)'};
+  veil.style.opacity=direction==='out'?'1':'0';
+  if(direction==='out'){await covered();origin=getOrigin();}
+  const copy=paperSource()?.cloneNode(true);
+  if(copy){copy.removeAttribute('id');copy.querySelectorAll('[id]').forEach(el=>el.removeAttribute('id'));copy.classList.add('portal-copy');copy.setAttribute('aria-hidden','true');stage.append(copy);stage.classList.add('has-copy');}
+  const start={left:origin.x+'px',top:origin.y+'px',width:origin.w+'px',height:origin.h+'px',transform:'none'},end={left:'0px',top:'0px',width:innerWidth+'px',height:innerHeight+'px',transform:'scale(1.15)'};
   try {
-    if(direction==='out')await covered();
     const a=stage.animate(direction==='in'?[start,end]:[end,start],{duration:760,easing:'cubic-bezier(.65,0,.2,1)',fill:'forwards'});
     const v=veil.animate(direction==='in'?[{opacity:0,offset:0},{opacity:0,offset:.55},{opacity:1,offset:1}]:[{opacity:1,offset:0},{opacity:0,offset:.45},{opacity:0,offset:1}],{duration:760,fill:'forwards'});
     await a.finished;
     if(direction==='in')await covered();
-    await overlay.animate([{opacity:1},{opacity:0}],{duration:180,fill:'forwards'}).finished;
+    if(direction==='in')await overlay.animate([{opacity:1},{opacity:0}],{duration:160,fill:'forwards'}).finished;
     a.cancel();v.cancel();
   } finally {
     overlay.getAnimations().forEach(a=>a.cancel());stage.getAnimations().forEach(a=>a.cancel());veil.getAnimations().forEach(a=>a.cancel());
-    stage.classList.remove('css-portal');overlay.hidden=true;
+    copy?.remove();stage.classList.remove('css-portal','has-copy');veil.removeAttribute('style');overlay.hidden=true;
   }
 }
 

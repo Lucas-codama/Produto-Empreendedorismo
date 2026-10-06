@@ -1,0 +1,84 @@
+/* Interface colors only. Uploaded document previews retain their real colors. */
+:root{color-scheme:light}
+html{scrollbar-gutter:stable}
+.header-actions{display:flex;align-items:center;gap:10px}
+.theme-button svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.theme-sun{display:none}
+[data-theme=dark] .theme-moon{display:none}
+[data-theme=dark] .theme-sun{display:block}
+.portal-managed .hero-copy,.portal-managed .hero-art,.portal-managed .context-panel,.portal-managed .history-view,.portal-managed #result-view{animation:none!important;opacity:1;transform:none}
+/* Keep the portal's measured destination in place, including its fallback. */
+.portal-managed .hero-art #document-scene{transition:none}
+.portal-copy{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;max-width:none!important;min-height:0!important;margin:0!important;animation:none!important;transform:none!important}
+.has-copy .portal-fallback{display:none}
+.portal-copy canvas{display:none}
+.portal-copy .paper-fallback{opacity:1!important;visibility:visible!important}
+[data-theme=dark]{color-scheme:dark;--ink:#f0eaf7;--navy:#f0eaf7;--teal:#c3a8ff;--muted:#bdb0ca;--line:#483d54;--canvas:#19151f;--pale:#34283f;--amber:#ffbc9e;--amber-bg:#49312d}
+[data-theme=dark] .main-nav,[data-theme=dark] .tabs{background:#302735}
+[data-theme=dark] .nav{color:#c7bbd3}
+[data-theme=dark] .nav.active,[data-theme=dark] .tabs button[aria-selected=true]{background:#c6adf0;color:#241b30}
+[data-theme=dark] .motion-button{border-color:#665774}
+[data-theme=dark] .motion-button:hover{background:#34283f}
+[data-theme=dark] .primary,[data-theme=dark] .upload-cta{background:#7751c7;color:#fff}
+[data-theme=dark] .primary:hover{background:#8760d5}
+[data-theme=dark] .cta-arrow{color:#4e329c;background:#e0d0ff}
+[data-theme=dark] .upload-area.dragover{background:#403054;box-shadow:0 0 0 20px #403054}
+[data-theme=dark] #file-help{color:#c7bbd3}
+[data-theme=dark] .example-button{border-color:#776684}
+[data-theme=dark] .art-halo{background:radial-gradient(ellipse at 40% 30%,#504069,#2c2239 74%);box-shadow:0 0 75px #7c56bc15}
+[data-theme=dark] .spark-two{color:#f2a081}
+[data-theme=dark] .hero-foot{color:#b8a8c6}
+[data-theme=dark] .hero-line{background:#493a56}
+[data-theme=dark] .context-card,[data-theme=dark] .history-view,[data-theme=dark] .note-card,[data-theme=dark] dialog{background:#26202e;border-color:#4b3c58;box-shadow:0 10px 40px #0003}
+[data-theme=dark] .selected-file,[data-theme=dark] .file-badge,[data-theme=dark] .result-toolbar .secondary{background:#3b2c4d;color:#d7c0ff}
+[data-theme=dark] input,[data-theme=dark] textarea,[data-theme=dark] select{background:#211b29;color:#eee5f5;border-color:#64536f}
+[data-theme=dark] input::placeholder,[data-theme=dark] textarea::placeholder{color:#b5a5c2}
+[data-theme=dark] .secondary{color:#e9dff3;border-color:#776582}
+[data-theme=dark] .secondary:hover,[data-theme=dark] .recent-item:hover{background:#392c45}
+[data-theme=dark] .history-table-head{border-color:#665474}
+[data-theme=dark] .recent-item:hover .file-badge{background:#503a68}
+[data-theme=dark] .history-view::before,[data-theme=dark] .board-clip{background:linear-gradient(145deg,#85709d,#59446f);border-color:#a18ab8}
+[data-theme=dark] .board-clip::after{background:#b8a1d0}
+[data-theme=dark] .paper-board{background:#30253d;border-color:#59456c;box-shadow:0 8px 0 -4px #201a29,0 22px 50px -28px #0009}
+[data-theme=dark] .paper-board::before{background:#241c2e;border-color:#51405f}
+[data-theme=dark] .paper-board:hover{box-shadow:0 10px 0 -4px #201a29,0 28px 55px -28px #0009}
+[data-theme=dark] .note-card:hover{box-shadow:0 6px 0 -3px #1a1421,0 23px 55px -30px #0009}
+[data-theme=dark] .format-chip,[data-theme=dark] .preview-toolbar select,[data-theme=dark] .issue-picker select{background:#40314f;color:#e0caef;border-color:#79618b}
+[data-theme=dark] .preview-title{color:#dfcdee}
+[data-theme=dark] .preview-title span,[data-theme=dark] .preview-note,[data-theme=dark] .issue-picker label{color:#c2acd0}
+[data-theme=dark] .preview-scope{background:#251d2f;color:#cfc0da;border-color:#574264}
+[data-theme=dark] .issue-category{color:#ffbe9e}
+[data-theme=dark] .issue-category.review{color:#d9baff}
+[data-theme=dark] .issue-detail .issue-guidance,[data-theme=dark] .issue-detail label{color:#d0bfdc}
+[data-theme=dark] .issue-detail .evidence,[data-theme=dark] .assist-option,[data-theme=dark] .coverage-check{background:#35283f;color:#e8ddee}
+[data-theme=dark] .issue-more{border-color:#594468;color:#d9baff}
+[data-theme=dark] .issue-detail textarea,[data-theme=dark] .issue-detail input{background:#211b29;color:#f0eaf7;border-color:#75617f}
+[data-theme=dark] .issue-detail .review-button{color:#c8aedb}
+[data-theme=dark] .step-controls .secondary{background:#413052;color:#e3caff}
+[data-theme=dark] .step-counter{color:#bfa8ce}
+[data-theme=dark] .analysis-count{color:#ffd0b5;background:#473029}
+[data-theme=dark] .analysis-count.human{color:#e3caff;background:#3b2b4d}
+[data-theme=dark] .analysis-count.incomplete{color:#eed39e;background:#423526}
+[data-theme=dark] .history-feedback{background:#3b2b4b;color:#eee0f8}
+[data-theme=dark] .reading-item{background:#302536;border-color:#645070}
+[data-theme=dark] .back-button span,[data-theme=dark] .icon-button{background:#302536;color:#e9dbf4;border-color:#756181}
+[data-theme=dark] .message{background:#432c27;border-color:#a87259}
+[data-theme=dark] .busy-overlay{background:#100c17aa}
+[data-theme=dark] .spinner{border-color:#5c4771;border-top-color:#c3a8ff}
+[data-theme=dark] .skip{background:#26202e}
+[data-theme=dark] .trash-target span{color:#dbc4f5}
+[data-theme=dark] .trash-orbit{background:radial-gradient(circle,#6b438a70 0,transparent 72%)}
+[data-theme=dark] .flying-history-item{background:#30243e!important;color:#f0eaf7}
+/* Never recolor the document under review: this would hide contrast problems. */
+.document-page{color:#292733;background:#fff;color-scheme:light}
+.finding-marker.selected{border-color:#5739b8;background:#5739b812}
+.flow-block.marked.selected{border-color:#5739b8}
+.flow-label{color:#8c3619}
+.document-page .slide-block.placeholder{color:#6b6575}
+@media(max-width:600px){
+  .site-header{height:120px;display:grid;grid-template-columns:1fr auto;grid-template-rows:52px 45px;column-gap:10px;padding-top:8px;padding-bottom:8px}
+  .brand{grid-column:1;grid-row:1}
+  .header-actions{grid-column:2;grid-row:1;gap:8px}
+  .main-nav{grid-column:1 / -1;grid-row:2;justify-self:center}
+  .theme-button svg{width:18px;height:18px}
+}

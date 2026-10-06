@@ -82,7 +82,11 @@ A navegação reúne Analisar e Histórico. O formulário aparece após a escolh
 
 Fredoka e Nunito são distribuídas sob a licença SIL Open Font License. Three.js usa licença MIT. As fontes, o módulo e as respectivas licenças estão em static/assets; a interface não consulta CDN ou serviço externo.
 
+O botão de lua/sol no topo alterna os temas claro e escuro. A escolha fica salva no navegador; antes de uma escolha, o site acompanha a preferência do sistema. O tema é aplicado antes da primeira renderização. As cores do material em análise permanecem originais, inclusive na prévia do Word, para não esconder problemas de contraste.
+
 A revisão usa uma prancheta com sombras, folhas e animações leves. O histórico apresenta uma transição de aproximação e afastamento da cena 3D. Ao pausar animações ou preferir movimento reduzido, a navegação ocorre diretamente. A cobertura não é exibida como seção na interface; as verificações continuam funcionando no analisador.
+
+A transição da prancheta controla também a entrada das telas de destino, evitando sobreposição com outra animação de entrada. Na saída, a cena volta ao seu contêiner no mesmo quadro em que chega à posição final, sem pausa e nova animação. O caminho em CSS usa uma cópia do elemento de origem/destino quando WebGL não está disponível.
 
 ## Motor de verificação e navegação
 

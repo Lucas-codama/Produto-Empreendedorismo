@@ -5,14 +5,14 @@
 <meta name="description" content="Verifique a acessibilidade de documentos e slides. Revise os apontamentos e ajuste seu material.">
 <title>Entrelinhas — Acessibilidade de documentos</title>
 <link rel="icon" href="/icon.svg" type="image/svg+xml"><link rel="preload" href="/assets/fredoka.ttf" as="font" type="font/ttf" crossorigin>
-<link rel="stylesheet" href="/styles.css"><script defer src="/app.js"></script><script type="module" src="/scene.js"></script>
+<script src="/theme.js"></script><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/dark.css"><script defer src="/app.js"></script><script type="module" src="/scene.js"></script>
 </head>
 <body>
 <a class="skip" href="#main">Pular para o conteúdo</a>
 <header class="site-header">
 <a class="brand" href="/" aria-label="Entrelinhas, início"><img src="/icon.svg" alt="" width="36" height="36"><span>entrelinhas<span class="brand-dot">.</span></span></a>
 <nav class="main-nav" aria-label="Navegação principal"><button id="new-material" class="nav active" aria-current="page">Analisar</button><button id="history-button" class="nav">Histórico</button></nav>
-<button id="motion-button" class="motion-button" aria-label="Pausar animações" aria-pressed="false" title="Pausar animações"><span aria-hidden="true">Ⅱ</span></button>
+<div class="header-actions"><button id="theme-button" class="motion-button theme-button" aria-label="Ativar modo escuro" aria-pressed="false" title="Ativar modo escuro"><svg class="theme-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.4 14A8.5 8.5 0 0 1 10 3.6 8.5 8.5 0 1 0 20.4 14Z"/></svg><svg class="theme-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg></button><button id="motion-button" class="motion-button" aria-label="Pausar animações" aria-pressed="false" title="Pausar animações"><span aria-hidden="true">Ⅱ</span></button></div>
 </header>
 <main id="main" tabindex="-1">
 <div class="page-controls" id="page-controls" hidden><button id="go-back" class="back-button" aria-label="Voltar à página anterior"><span aria-hidden="true">←</span> Voltar</button></div>

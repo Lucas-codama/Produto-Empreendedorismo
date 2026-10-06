@@ -122,7 +122,9 @@ try {
         };travelFrame=requestAnimationFrame(tick);
       });
       if(direction==='in')await covered();
-      if(!paused() && !document.hidden)await overlay.animate([{opacity:1},{opacity:0}],{duration:180,fill:'forwards'}).finished;
+      // On exit, p=0 already matches the home canvas. Reparent it in this same
+      // frame instead of holding the endpoint for another fade animation.
+      if(direction==='in' && !paused() && !document.hidden)await overlay.animate([{opacity:1},{opacity:0}],{duration:160,fill:'forwards'}).finished;
     } finally {
       cancelAnimationFrame(travelFrame);overlay.getAnimations().forEach(a=>a.cancel());
       home.append(canvas);camera.position.copy(saved.camera);camera.lookAt(0,0,0);stack.rotation.copy(saved.rotation);stack.position.copy(saved.position);cards[2].rotation.z=-.17;
