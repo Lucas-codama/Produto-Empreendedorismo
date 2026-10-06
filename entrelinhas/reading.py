@@ -3,7 +3,6 @@ from html import escape
 
 ROLES={'p','h1','h2','h3','figure','decorative'}
 
-
 def initial(job):
     items=[]
     for page in job['analysis']['pages']:

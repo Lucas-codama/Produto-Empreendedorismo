@@ -198,6 +198,20 @@ dialog{border-radius:28px;padding:30px;background:#fffaf6}.dialog-heading h2{fon
 .motion-paused .analysis-emblem,.motion-paused .empty-flower{animation:none}
 .is-navigating{overflow:hidden}
 .tabs button{white-space:nowrap}
+/* The desktop home fills the window; content can still overflow when needed. */
+@media(min-width:601px){
+  body:has(#upload-view:not([hidden]) #start-panel:not([hidden])){--home-header:106px;--home-back:0px}
+  body:has(#upload-view:not([hidden]) #start-panel:not([hidden])):has(#page-controls:not([hidden])){--home-back:61px}
+  body:has(#upload-view:not([hidden]) #start-panel:not([hidden])) main{min-height:calc(100svh - var(--home-header));display:flex;flex-direction:column;padding-bottom:16px}
+  body:has(#upload-view:not([hidden]) #start-panel:not([hidden])) #page-controls{height:55px;line-height:0;flex-shrink:0;padding-top:10px;margin-bottom:6px}
+  body:has(#upload-view:not([hidden]) #start-panel:not([hidden])) #upload-view{display:flex;flex-direction:column;flex:1}
+  body:has(#upload-view:not([hidden]) #start-panel:not([hidden])) .hero{flex:1;min-height:0;padding:24px 0 52px}
+  body:has(#upload-view:not([hidden]) #start-panel:not([hidden])) .hero-art{height:clamp(260px,calc(100svh - var(--home-header) - var(--home-back) - 92px),630px)}
+  body:has(#upload-view:not([hidden]) #start-panel:not([hidden])) .hero h1{font-size:clamp(58px,min(7.1vw,13svh),118px);margin-bottom:clamp(20px,3svh,35px)}
+  body:has(#upload-view:not([hidden]) #start-panel:not([hidden])) .hero .eyebrow{margin-bottom:clamp(12px,2svh,24px)}
+  body:has(#upload-view:not([hidden]) #start-panel:not([hidden])) .example-button{margin-top:clamp(12px,2svh,25px)}
+}
+@media(min-width:601px) and (max-width:1100px){body:has(#upload-view:not([hidden]) #start-panel:not([hidden])){--home-header:90px}}
 .page-controls{padding-top:10px;margin-bottom:6px}
 .back-button{display:inline-flex;align-items:center;gap:9px;border:0;background:transparent;color:var(--muted);font:800 12px Nunito;padding:8px 2px;cursor:pointer}
 .back-button span{display:grid;place-items:center;width:29px;height:29px;border:1px solid #d7cce0;border-radius:50%;font-size:17px;background:#fffaf5;transition:transform .3s}
