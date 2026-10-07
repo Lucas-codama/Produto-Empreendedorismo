@@ -39,11 +39,12 @@
 .mascot-foot{position:absolute;bottom:-7px;width:29px;height:17px;border-radius:18px 18px 10px 10px;background:var(--skin);box-shadow:inset -3px -3px 4px color-mix(in srgb,var(--shade) 60%,transparent)}.mascot-foot.left{left:14px;transform:rotate(-8deg)}.mascot-foot.right{right:14px;transform:rotate(8deg)}.pill-3 .mascot-foot{width:23px}
 .mascot-star{position:absolute;right:15px;top:32px;color:#ef947a;font-size:38px;animation:mascot-star-turn 22s linear infinite}.mascot-spark{position:absolute;left:19px;bottom:62px;color:#fff6ec;font-size:28px;animation:mascot-spark 4s ease-in-out infinite}
 [data-gaze=peek] .mascot-face{transform:none}[data-gaze=peek] .mascot-eyes{animation:none}[data-gaze=peek] .mascot-eyes>i>span{transform:translate(3px,1px)}
-[data-gaze=peek] .mascot-hand{top:44px;transform:rotate(0)}[data-gaze=peek] .hand-left{left:10px}[data-gaze=peek] .hand-right{right:10px}
-[data-gaze=peek] .pill-1 .mascot-hand{top:45px}[data-gaze=peek] .pill-3 .mascot-hand{top:36px}[data-gaze=peek] .pill-3 .hand-left{left:5px}[data-gaze=peek] .pill-3 .hand-right{right:5px}
+[data-gaze=peek] .mascot-hand{top:60px;transform:rotate(0)}[data-gaze=peek] .hand-left{left:10px}[data-gaze=peek] .hand-right{right:10px}
+[data-gaze=peek] .mascot-hand i{top:-18px;height:27px}[data-gaze=peek] .mascot-hand i:nth-child(2){top:-21px}
+[data-gaze=peek] .pill-1 .mascot-hand{top:61px}[data-gaze=peek] .pill-3 .mascot-hand{top:51px}[data-gaze=peek] .pill-3 .hand-left{left:5px}[data-gaze=peek] .pill-3 .hand-right{right:5px}
 [data-gaze=peek] .pill-2 .hand-right i:nth-child(2){animation:mascot-peek 3.7s ease-in-out infinite}
 @keyframes mascot-blink{0%,46%,49%,100%{transform:scaleY(1)}47%,48%{transform:scaleY(.08)}}
-@keyframes mascot-peek{0%,20%,76%,100%{transform:rotate(0) translateX(0)}34%,59%{transform:rotate(-42deg) translateX(-4px)}}
+@keyframes mascot-peek{0%,20%,76%,100%{transform:rotate(0) translateX(0)}34%,59%{transform:rotate(42deg) translateX(4px)}}
 @keyframes mascot-star-turn{to{transform:rotate(360deg)}}
 @keyframes mascot-spark{0%,100%{transform:scale(.85) rotate(-8deg)}50%{transform:scale(1.05) rotate(10deg)}}
 [data-theme=dark] .mascot-orbit{background:radial-gradient(ellipse at 26% 24%,#71528f,#44305b 65%,#372647)}
@@ -54,3 +55,10 @@
 @media(max-width:600px){.site-header .brand{font-size:25px}.site-header .brand img{width:30px;height:30px}.site-header .header-actions{gap:6px}.site-header .header-actions>button{width:36px;height:36px}.home-links{gap:25px}.resume-button{max-width:280px;margin-top:14px;padding:8px 12px}.resume-button small{max-width:220px}.profile-row{flex-wrap:wrap;gap:8px}.profile-row label{flex:1 0 100%}.profile-row button{margin:0}.review-filters{gap:12px;margin:0 0 22px}.review-filters label{flex:1;min-width:135px;flex-direction:column;align-items:start;gap:5px}.review-filters select{width:100%;min-width:0}.progress-status{margin-left:0}.auth-dialog{padding:22px 20px}.auth-dialog .dialog-heading h2{font-size:27px}.auth-layout{display:flex;flex-direction:column;gap:0}.mascot-stage{height:180px;width:260px;align-self:center}.mascot-orbit{inset:4px 10px 6px}.mascot-group{transform:scale(.67);transform-origin:50% 92%;bottom:-8px}.mascot-ground{bottom:4px;width:170px;left:calc(50% - 78px);height:17px}.mascot-star{top:1px;right:16px;font-size:28px}.mascot-spark{bottom:25px;left:21px;font-size:20px}.auth-footer{margin-top:20px;width:100%}.auth-fields{width:100%}.account-storage-note{font-size:10px!important}.auth-tabs{margin-top:0}.template-item{gap:14px;padding:16px}.template-item strong{font-size:14px}}
 @media(prefers-reduced-motion:reduce){.mascot-stage *{animation:none!important;transition:none!important}}
 .motion-paused .mascot-stage *{animation:none!important;transition:none!important}
+.pill-2 .mascot-hand{box-shadow:inset -3px -2px 4px #ded6ea99,0 1px 2px #77608728}
+.auth-dialog{max-height:calc(100svh - 32px);scrollbar-gutter:stable}
+.auth-footer{border:0;padding-top:0}
+.auth-fields label{display:block;font-size:13px;margin-bottom:16px}
+.auth-footer p,.password-help{font-size:12px!important}
+.profile-row{border:0}
+@media(min-width:601px) and (max-height:760px){.auth-dialog{padding:22px 28px}.auth-layout{row-gap:18px}.auth-fields input{padding-top:10px;padding-bottom:10px}.auth-fields #auth-guest{margin-top:8px}.auth-fields .primary{margin-top:4px}}

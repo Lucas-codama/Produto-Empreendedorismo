@@ -180,7 +180,7 @@ dialog{border-radius:28px;padding:30px;background:#fffaf6}.dialog-heading h2{fon
 .preview-toolbar>div{display:flex;align-items:center;gap:14px}.preview-toolbar select{background:#f5edf9;border-color:#cebbdd;max-width:190px;border-radius:20px}
 .format-chip{font-weight:900;font-size:10px;letter-spacing:.7px;background:#f6edf9;padding:7px 12px;border-radius:18px;color:#78628e}
 .preview-columns{padding:0;background:transparent;gap:18px;overflow:visible}
-.preview-title{display:flex;align-items:center;justify-content:space-between;font:500 18px Fredoka;letter-spacing:0;color:#5e476f;padding:0 3px;margin-bottom:10px}
+.preview-title{display:flex;align-items:center;justify-content:space-between;gap:16px;font:500 18px/1.4 Fredoka;letter-spacing:0;color:#5e476f;padding:2px 3px;margin-bottom:14px}
 .preview-title span{font:700 10px Nunito;color:#8e739f}
 .document-page{border:1px solid #e3d9df;border-radius:12px;box-shadow:0 8px 18px -9px #59406538;min-height:0}
 .doc-flow{min-height:200px}
@@ -193,7 +193,7 @@ dialog{border-radius:28px;padding:30px;background:#fffaf6}.dialog-heading h2{fon
 .issue-detail{padding:22px 24px 24px}.issue-category{font-size:10px;font-weight:700;line-height:1.5;color:#9b6b51;display:flex;align-items:center;gap:6px}.issue-category span{font-size:8px}.issue-category.review{color:#795997}.issue-category.review span{font-size:14px}
 .issue-detail h3{font:500 25px/1.17 Fredoka;margin:14px 0 14px;letter-spacing:-.4px}
 .issue-detail .issue-guidance{font-size:12px;line-height:1.7;margin-bottom:16px;color:#726577}
-.issue-more{margin:0 0 23px;border-top:1px solid #e5dce8;border-bottom:1px solid #e5dce8;padding:13px 0;color:#71548a;font-size:11px}
+.issue-more{margin:0 0 23px;border:0;padding:8px 0;color:#71548a;font-size:11px}
 .issue-more summary{cursor:pointer;font-weight:800;list-style:none;display:flex;align-items:center;justify-content:space-between}
 .issue-more summary::-webkit-details-marker{display:none}.issue-more summary span{font-size:17px;transition:transform .3s}.issue-more[open] summary span{transform:rotate(45deg)}
 .issue-more p{font-size:12px;margin:13px 0 0}.issue-more .evidence{padding:13px;background:#efe7f4;margin-bottom:0}
@@ -245,6 +245,17 @@ dialog{border-radius:28px;padding:30px;background:#fffaf6}.dialog-heading h2{fon
 .back-button span{display:grid;place-items:center;width:29px;height:29px;border:1px solid #d7cce0;border-radius:50%;font-size:17px;background:#fffaf5;transition:transform .3s}
 .back-button:hover{color:var(--teal)}.back-button:hover span{transform:translateX(-3px)}
 .review-tools{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.paper-board::before{display:none}
+.note-card::before{display:none}
+.comparison{border:0;padding:12px 0}
+.history-table-head,.recent-item{border:0}
+.recent-item{border-radius:16px;margin:4px 0}
+.preview-toolbar{gap:16px;flex-wrap:wrap;padding-bottom:18px}
+.preview-toolbar>div{flex-wrap:wrap;gap:12px}
+.paper-column{min-width:0}
+.result-name h1,.result-heading p{overflow-wrap:anywhere}
+.step-controls{flex-wrap:wrap;row-gap:14px}
+@media(max-width:600px){.preview-toolbar{flex-wrap:wrap}.preview-toolbar select{max-width:100%}.preview-columns{gap:28px}.preview-scope{margin-bottom:20px}.review-grid,.step-layout{gap:30px}}
 .analysis-count.incomplete{background:#efe6d7;color:#805f31}
 #dialog-body details summary{font-weight:800;font-size:12px;color:var(--teal);cursor:pointer}
 @media(max-width:600px){.review-tools{width:100%;justify-content:flex-start}.review-tools .secondary{font-size:11px}.page-controls{margin-bottom:0}}

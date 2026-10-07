@@ -57,7 +57,7 @@ html{scrollbar-gutter:stable}
 [data-theme=dark] .format-chip,[data-theme=dark] .preview-toolbar select,[data-theme=dark] .issue-picker select{background:#40314f;color:#e0caef;border-color:#79618b}
 [data-theme=dark] .preview-title{color:#dfcdee}
 [data-theme=dark] .preview-title span,[data-theme=dark] .preview-note,[data-theme=dark] .issue-picker label{color:#c2acd0}
-[data-theme=dark] .preview-scope{background:#251d2f;color:#cfc0da;border-color:#574264}
+[data-theme=dark] .preview-scope{background:transparent;color:#cfc0da}
 [data-theme=dark] .issue-category{color:#ffbe9e}
 [data-theme=dark] .issue-category.review{color:#d9baff}
 [data-theme=dark] .issue-detail .issue-guidance,[data-theme=dark] .issue-detail label{color:#d0bfdc}

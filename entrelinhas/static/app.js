@@ -366,6 +366,7 @@ function issuePicker(issues) {
 }
 function issueControls(issues) {
   const visible=visibleIssueIndexes();
+  if(!visible.length)return '';
   return `<div class="step-controls" aria-label="Navegar pelos apontamentos"><button class="secondary small" data-step="-1" ${adjacentIssue(-1)<0?'disabled':''}>← Anterior</button><span class="step-counter">${visible.indexOf(selected)+1} / ${visible.length}</span><button class="secondary small" data-step="1" ${adjacentIssue(1)<0?'disabled':''}>Próximo →</button></div>`;
 }
 function adjacentIssue(direction) {

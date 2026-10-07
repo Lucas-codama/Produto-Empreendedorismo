@@ -15,6 +15,6 @@
 .flying-history-item{position:absolute!important;margin:0!important;background:#fffaf3!important;border-radius:20px!important;box-shadow:0 12px 35px #4f328930;transform-origin:center;pointer-events:none!important;overflow:hidden;z-index:1}.flying-history-item:disabled{opacity:1}
 .trash-confetti{position:absolute;width:13px;height:13px;border-radius:4px;z-index:3}.trash-confetti[data-shape="1"]{border-radius:50%}.trash-confetti[data-shape="2"]{clip-path:polygon(50% 0,100% 100%,0 100%);border-radius:0}.trash-confetti[data-shape="3"]{clip-path:polygon(50% 0,61% 35%,98% 35%,68% 58%,79% 96%,50% 74%,21% 96%,32% 58%,2% 35%,39% 35%);border-radius:0;width:19px;height:19px}
 @media(max-width:700px){.history-heading{align-items:flex-start;gap:20px;flex-wrap:wrap}.history-actions{justify-content:flex-start}.history-actions button{font-size:13px;padding:12px 16px}.history-feedback{font-size:14px}}
-.preview-scope{margin:0;padding:10px 16px;font-size:11px;line-height:1.5;color:var(--muted);border-bottom:1px solid var(--line);background:var(--canvas)}
+.preview-scope{margin:0 0 24px;padding:3px;font-size:11px;line-height:1.6;color:var(--muted);border:0;background:transparent}
 .issue-detail .issue-fact{color:var(--ink);line-height:1.5}
 .issues-panel>.step-controls{margin:0 17px 17px}
