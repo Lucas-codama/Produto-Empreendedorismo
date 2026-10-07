@@ -1,5 +1,5 @@
 {
-  "engine_version": 7,
+  "engine_version": 9,
   "cases": [
     {
       "case": "PDF branco sobre amarelo",
@@ -273,11 +273,6 @@
           "evidence": "Existe StructTreeRoot, mas nenhum elemento de estrutura foi encontrado."
         },
         {
-          "rule": "pdf_text_untagged",
-          "severity": "attention",
-          "evidence": "Página 1: caracteres sem MCID de estrutura identificado."
-        },
-        {
           "rule": "contrast",
           "severity": "attention",
           "evidence": "#FFFFFF sobre #FFFF00: 1.07:1. Referência: 4.5:1."
@@ -286,6 +281,11 @@
           "rule": "font_size",
           "severity": "attention",
           "evidence": "Menor fonte identificada: 11 pt. Preferência: 20 pt."
+        },
+        {
+          "rule": "pdf_text_untagged",
+          "severity": "attention",
+          "evidence": "Página 1: caracteres sem MCID de estrutura identificado."
         },
         {
           "rule": "pdf_structure_review",
@@ -443,7 +443,7 @@
         {
           "rule": "contrast_unknown",
           "severity": "review",
-          "evidence": "1 trechos sem cálculo confiável no documento."
+          "evidence": ""
         }
       ]
     },
@@ -470,7 +470,7 @@
         {
           "rule": "contrast_unknown",
           "severity": "review",
-          "evidence": "1 trechos sem cálculo confiável no documento."
+          "evidence": ""
         },
         {
           "rule": "slide_title",

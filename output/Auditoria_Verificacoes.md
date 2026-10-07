@@ -1,6 +1,6 @@
 # Auditoria das verificações do Entrelinhas
 
-Motor: 7. Data: 06/10/2026. Sem IA. Testes locais com arquivos sintéticos, sem envio de materiais.
+Motor: 9. Data: 06/10/2026. Sem IA. Testes locais com arquivos sintéticos, sem envio de materiais.
 
 O resultado confirma apenas os casos e recursos abaixo. Não certifica conformidade integral, compatibilidade com leitores de tela nem todos os arquivos desses formatos.
 

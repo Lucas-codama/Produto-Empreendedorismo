@@ -18,7 +18,7 @@ Em outro computador, use Python 3.11 ou superior e instale as dependências de `
 
 1. Clique em **Abrir um exemplo** para analisar uma atividade real em PPTX com contexto fictício e barreiras conhecidas. Você também pode enviar um arquivo próprio.
 2. Clique em **Escolher arquivo**. Para materiais próprios, informe disciplina, tipo de atividade, necessidades e tecnologias assistivas. O tamanho de fonte preferido é opcional e deve refletir o estudante.
-3. Explore **Lado a lado** e **Passo a passo**. A explicação e a evidência de cada apontamento ficam em **Entender este ponto**.
+3. Explore **Lado a lado** e **Passo a passo**. A explicação e a evidência de cada apontamento ficam junto à prévia. Use os filtros de tipo e conferência para restringir lista e marcações.
 4. Em arquivos DOCX e PPTX, ajuste fonte, cor do texto e descrição de imagens. Cada edição gera uma nova versão, preservando o original.
 5. Use **Ajustes sugeridos** para selecionar ajustes técnicos de fonte e contraste. Descrições não são inventadas automaticamente.
 6. Baixe o arquivo revisado, abra no Word ou PowerPoint e confira layout e conteúdo.
@@ -60,7 +60,8 @@ Para encerrar um servidor iniciado pelo atalho, execute `Parar.ps1`. A limpeza p
 ## Testes de desenvolvimento
 
 ```powershell
-& 'C:\Users\Lucas\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m unittest -v test_analyzer test_extended test_history
+& 'C:\Users\Lucas\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m unittest discover -v
+& 'C:\Users\Lucas\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe' --test test_review_state.cjs
 ```
 
 A suíte verifica contraste, parâmetros individuais, arquivos corrompidos, posições do PDF, descrições, preservação do original, correções reais nos arquivos, exportação, relatório e o ciclo HTTP de análise/revisão. Esses testes técnicos não substituem os testes planejados com professores, estudante e especialista.
@@ -102,7 +103,7 @@ As análises salvas são recalculadas quando a versão do motor muda, sem modifi
 
 Os dois modos de revisão têm Anterior e Próximo. Escolher um apontamento abre sua página e destaca o elemento identificado; escolher uma página seleciona um apontamento dela ou informa que não há um específico. Conferências do documento inteiro mantêm esse escopo explícito enquanto o professor percorre as páginas. A marcação pessoal e a posição são preservadas ao trocar de modo. As explicações apresentam o resultado concreto e a ação correspondente; descrições existentes ficam visíveis no painel.
 
-A aplicação utiliza verificações por regras, sem integração de IA generativa ou agente de IA. A suíte contém 50 testes, incluindo regressões de texto branco sobre fundo amarelo, realces mistos, tabelas, grupos, degradês, CMYK, transparência, conteúdo fora do corpo do Word, estrutura do PDF, versão HTML e limpeza/recuperação do histórico. Bordas e sublinhados não são tratados como fundo dos caracteres; a renderização sem texto é regenerada após remover os objetos. O teste com OCR real é pulado quando o executável não está instalado; os demais continuam sendo executados.
+A aplicação utiliza verificações por regras, sem integração de IA generativa ou agente de IA. A suíte contém 60 testes, incluindo regressões de texto branco sobre fundo amarelo, realces mistos, tabelas, grupos, degradês, CMYK, transparência, conteúdo fora do corpo do Word, estrutura do PDF, versão HTML e limpeza/recuperação do histórico. Bordas e sublinhados não são tratados como fundo dos caracteres; a renderização sem texto é regenerada após remover os objetos. O teste com OCR real é pulado quando o executável não está instalado; os demais continuam sendo executados.
 
 O arquivo `../output/Teste_Acessibilidade/Teste_Acessibilidade_10_Paginas.pdf` contém nove casos adversos e uma página de controle. Use a preferência de fonte de 20 pt para reproduzir os apontamentos de tamanho. `Gabarito.md`, na mesma pasta, explica o que deve ser detectado e o que exige revisão humana. `build_accessibility_fixture.py` recria o PDF e registra a análise real. Os apontamentos de figuras, títulos e tabelas do PDF agora carregam a página correspondente.
 
@@ -111,3 +112,29 @@ O arquivo `../output/Teste_Acessibilidade/Teste_Acessibilidade_10_Paginas.pdf` c
 ## Reconhecimento de texto em imagens
 
 Execute `Instalar_OCR.ps1` somente quando desejar ativar o recurso e confirme a janela do Windows. O aplicativo procura o executável em `.runtime/tools/tesseract`, em `C:/Program Files/Tesseract-OCR` ou no PATH. Os dados de idioma ficam em `.runtime/tools/tessdata`. O processamento usa o modo clássico `--oem 0`, sem rede neural LSTM, e não faz upload dos materiais. O texto é obtido de uma cópia com contraste realçado; as medições usam sempre os pixels originais. Imagens e transcrições não são aprovadas automaticamente.
+
+## Perfis e retomada
+
+**Meus perfis**, no menu de conta, e **Gerenciar**, no formulário, permitem criar, editar e remover perfis. Um perfil guarda necessidades, tecnologias e fonte preferida; disciplina e atividade continuam sendo informadas para cada material. Escolher um perfil preenche o formulário e permite revisar os valores antes da análise.
+
+Os filtros **Tipo** e **Conferência** afetam os apontamentos, Anterior/Próximo e as marcações na prévia, nos dois modos. Marcar **Conferi este ponto** é uma anotação do professor e não altera o diagnóstico técnico.
+
+A página, o apontamento, o modo, os filtros, os itens conferidos e a rolagem são gravados no servidor em `workspace.json`. Há uma cópia de apoio no navegador. **Continuar revisão**, na página inicial, retoma o último material disponível. O salvamento é automático; trocar de conta aguarda a gravação pendente.
+
+## Modelos
+
+**Modelos**, na página inicial, oferece uma atividade em DOCX, uma avaliação em DOCX e três slides em PPTX. São arquivos editáveis com título, estrutura de seções, idioma, fontes maiores e texto preto sobre branco. Não possuem imagens informativas sem descrição. Ajuste o tamanho conforme o estudante e analise o conteúdo depois de editar.
+
+Os modelos Word tiveram estrutura e fontes verificadas e uma prévia aproximada de cada página inspecionada com Aspose FOSS local. O renderizador canônico `render_docx.py` não executou porque este ambiente não contém LibreOffice; a paginação nativa do Word permanece sem validação. As prévias de QA não são distribuídas. Os três slides finais foram renderizados e inspecionados; o pacote PPTX passou pelas validações de estrutura, geometria, fontes e reimportação.
+
+## Contas opcionais
+
+O site funciona sem conta. **Entrar** permite criar uma conta local com nome, e-mail e senha de 8 a 128 caracteres. Os três personagens acompanham o ponteiro e cobrem os olhos quando a senha é exibida; só o personagem da frente espreita por entre os dedos; a animação respeita o controle de pausa e movimento reduzido. Nenhuma animação lê o conteúdo da senha.
+
+As senhas usam scrypt com sal aleatório; tokens de sessão são aleatórios e só seus hashes são armazenados. O cookie é HttpOnly e SameSite Strict, com validade de sete dias. Há limite de tentativas persistente. O banco fica em `.runtime/accounts.sqlite`; materiais, perfis, progresso e lixeira de cada conta ficam em `.runtime/accounts/<id>/`. As rotas de arquivos, revisões, leitura e histórico verificam a conta atual. **Copiar meus materiais locais para a conta** importa explicitamente uma cópia e preserva os originais sem conta.
+
+**Não há sincronização pela internet nesta versão local.** Não basta copiar o site ou criar a mesma conta em outra instalação. Para acessar o mesmo acervo entre dispositivos, será necessário hospedar um serviço compartilhado com HTTPS, armazenamento persistente, sessões e espaço de visitante por pessoa, recuperação de senha e confirmação de e-mail. O servidor atual permanece restrito a `127.0.0.1`; não o exponha publicamente como substituto desse serviço. Não há envio de e-mail, verificação de endereço ou recuperação de senha local.
+
+## Validação desta atualização
+
+60 testes Python: 59 aprovados e 1 dependente da instalação real de OCR pulado. 8 testes JavaScript: todos aprovados. Auditoria: 19 casos, sem falhas nos critérios declarados; 16 verificações confirmadas, 1 de sentido da descrição encaminhada ao professor e 2 de OCR com ativação pendente. A interface foi verificada em desktop e 390 × 844: cadastro, login correto/incorreto, saída, perfil salvo, filtros nas marcações, conferência pessoal, retomada na terceira página e animações pausadas. Os testes de conta usaram dados fictícios em um servidor isolado, sem alterar o histórico do usuário.

@@ -1,0 +1,11 @@
+const test=require('node:test'),assert=require('node:assert/strict'),rules=require('./static/review-state.js');
+const issues=[{id:'a',rule:'font_size',page:0},{id:'b',rule:'contrast',page:1},{id:'c',rule:'alt_missing',page:1},{id:'d',rule:'pdf_figure_alt',page:2},{id:'e',rule:'reading_order',page:null,severity:'review'}];
+const analysis={issues,pages:[{},{},{}]};
+test('Filters keep original issue indexes instead of renumbering targets',()=>assert.deepEqual(rules.indexes(issues,{category:'images',status:'all'},new Set()),[2,3]));
+test('Reviewed filter is independent of diagnostic severity',()=>{assert.deepEqual(rules.indexes(issues,{category:'all',status:'reviewed'},new Set(['b'])),[1]);assert.deepEqual(rules.indexes(issues,{category:'all',status:'human'},new Set(['b'])),[4]);});
+test('Resume retains selected issue, page, mode, filters and valid reviewed IDs',()=>{const r=rules.restore(analysis,{page:2,issue_id:'d',mode:'step',reviewed:['c','unknown'],filters:{category:'images',status:'pending'}});assert.equal(r.selected,3);assert.equal(r.page,2);assert.equal(r.mode,'step');assert.deepEqual([...r.reviewed],['c']);});
+test('An excluded selection moves to a visible item and its page',()=>{const r=rules.restore(analysis,{page:0,issue_id:'a',filters:{category:'images',status:'all'}});assert.equal(r.selected,2);assert.equal(r.page,1);});
+test('No matches remains an empty result instead of showing a hidden issue',()=>{const r=rules.restore(analysis,{page:1,issue_id:'b',reviewed:['b'],filters:{category:'contrast',status:'pending'}});assert.equal(r.selected,-1);assert.equal(r.page,1);});
+test('Document-wide checks do not unexpectedly switch the restored page',()=>{const r=rules.restore(analysis,{page:2,issue_id:'e'});assert.equal(r.selected,4);assert.equal(r.page,2);});
+test('Explicit page without selected item is retained',()=>{const r=rules.restore(analysis,{page:2,issue_id:null});assert.equal(r.selected,-1);assert.equal(r.page,2);});
+test('A removed finding after recalculation falls back to a valid finding on the saved page',()=>{const r=rules.restore(analysis,{page:1,issue_id:'removed',reviewed:'corrupt'});assert.equal(r.selected,1);assert.equal(r.page,1);assert.equal(r.reviewed.size,0);});

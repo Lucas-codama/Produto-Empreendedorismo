@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+from contextvars import ContextVar
+from functools import lru_cache, wraps
 import base64
 import binascii
 from datetime import datetime, timezone
@@ -21,6 +23,8 @@ from analyzer import MaterialError, MAX_BYTES, ENGINE_VERSION, analyze, apply_ed
 import pypdfium2 as pdfium
 import reading
 import history_store
+import accounts
+import workspace_store
 from vision_checks import PDF_LOCK
 
 ROOT = Path(__file__).resolve().parent
@@ -28,12 +32,48 @@ STATIC = ROOT / 'static'
 DATA = ROOT / '.runtime' / 'jobs'
 RENDER_LOCK = PDF_LOCK
 JOB_LOCK = threading.RLock()
+CURRENT_USER = ContextVar('entrelinhas_user', default=None)
+
+@lru_cache(maxsize=12)
+def account_database(path):
+    return accounts.Accounts(path)
+
+def identity_store():
+    return account_database(str(DATA.parent/'accounts.sqlite'))
+
+def workspace_path():
+    user = CURRENT_USER.get()
+    return DATA.parent/'accounts'/user['id'] if user else DATA.parent
+
+def data_path():
+    folder = workspace_path()/'jobs' if CURRENT_USER.get() else DATA
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+def template_catalog():
+    return [
+        {'id':'activity','filename':'Modelo_Atividade.docx','format':'Word','name':'Atividade','description':'Título, instruções e espaço para respostas.'},
+        {'id':'assessment','filename':'Modelo_Avaliacao.docx','format':'Word','name':'Avaliação','description':'Questões organizadas com títulos e texto ampliado.'},
+        {'id':'slides','filename':'Modelo_Aula.pptx','format':'PowerPoint','name':'Aula','description':'Slides com títulos, ordem de leitura e contraste alto.'},
+    ]
+
+def scoped_request(method):
+    @wraps(method)
+    def wrapped(self):
+        cookie = self.headers.get('Cookie','')
+        self.user = identity_store().user(cookie) if 'entrelinhas_session=' in cookie else None
+        token = CURRENT_USER.set(self.user)
+        try:
+            return method(self)
+        finally:
+            CURRENT_USER.reset(token)
+    return wrapped
 
 
 def job_path(identity):
     if not re.fullmatch('[0-9a-f]{32}', identity or ''):
         raise MaterialError('Análise não encontrada.')
-    return DATA / identity
+    return data_path() / identity
 
 
 def load_job(identity):
@@ -91,7 +131,7 @@ def _create_job(content, filename, context, previous=None, edits=None):
         (folder / 'analysis.json').write_text(json.dumps(job, ensure_ascii=False), encoding='utf-8')
         return job
     except Exception:
-        if not folder.resolve().is_relative_to(DATA.resolve()):
+        if not folder.resolve().is_relative_to(data_path().resolve()):
             raise RuntimeError('Unexpected material folder')
         shutil.rmtree(folder)
         raise
@@ -152,7 +192,7 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_):
         pass
 
-    def send(self, content, status=200, content_type='application/json; charset=utf-8', disposition=None):
+    def send(self, content, status=200, content_type='application/json; charset=utf-8', disposition=None, headers=None):
         if not isinstance(content, bytes):
             content = json.dumps(content, ensure_ascii=False).encode('utf-8')
         self.send_response(status)
@@ -163,9 +203,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
         if disposition:
             self.send_header('Content-Disposition', disposition)
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(content)
 
+    @scoped_request
     def do_GET(self):
         if not self.valid_host():
             return self.send({'error': 'Abra este serviço pelo endereço local.'}, 403)
@@ -173,10 +216,29 @@ class Handler(BaseHTTPRequestHandler):
             path = unquote(urlparse(self.path).path)
             if path == '/api/health':
                 return self.send({'app': 'entrelinhas', 'status': 'ok'})
+            if path == '/api/account':
+                return self.send({'user':self.user, 'scope':self.user['id'] if self.user else 'guest','storage':'local-server','online_sync':False})
+            if path == '/api/workspace':
+                state = workspace_store.read(workspace_path())
+                last = state.get('last_job_id')
+                if last and (job_path(last)/'analysis.json').exists():
+                    j = json.loads((job_path(last)/'analysis.json').read_text(encoding='utf-8'))
+                    state['resume'] = {'id':last,'filename':j['filename'],'version':j['version']}
+                else:
+                    state['resume'] = None
+                return self.send(state)
+            if path == '/api/templates':
+                return self.send(template_catalog())
+            template_match = re.fullmatch(r'/api/template/([a-z-]+)/file',path)
+            if template_match:
+                entry = next((t for t in template_catalog() if t['id']==template_match[1]),None)
+                if not entry:
+                    raise MaterialError('Modelo não encontrado.')
+                return self.send((ROOT/'templates'/entry['filename']).read_bytes(),content_type='application/octet-stream',disposition="attachment; filename*=UTF-8''"+quote(entry['filename']))
             if path == '/api/jobs':
                 records = []
                 with JOB_LOCK:
-                    for file in DATA.glob('*/analysis.json'):
+                    for file in data_path().glob('*/analysis.json'):
                         j = json.loads(file.read_text(encoding='utf-8'))
                         records.append({k: j[k] for k in ['id', 'filename', 'version', 'created_at', 'root_id']})
                 return self.send(sorted(records, key=lambda j: j['created_at'], reverse=True)[:20])
@@ -215,6 +277,7 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             self.send({'error': 'Não foi possível abrir esse recurso.'}, 500)
 
+    @scoped_request
     def do_POST(self):
         if not self.valid_host():
             return self.send({'error': 'Abra este serviço pelo endereço local.'}, 403)
@@ -229,10 +292,51 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < length <= 30 * 1024 * 1024:
                 return self.send({'error': 'Requisição muito grande ou vazia.'}, 413)
             body = json.loads(self.rfile.read(length))
+            if not isinstance(body,dict):
+                raise MaterialError('Formato de requisição inválido.')
             path = urlparse(self.path).path
+            if path in {'/api/account/register','/api/account/login'}:
+                database = identity_store()
+                user, token = database.register(body,self.client_address[0]) if path.endswith('/register') else database.login(body,self.client_address[0])
+                return self.send({'user':user,'scope':user['id']},headers={'Set-Cookie':database.cookie(token)})
+            if path == '/api/account/logout':
+                database=identity_store();database.logout(self.headers.get('Cookie'))
+                return self.send({'user':None,'scope':'guest'},headers={'Set-Cookie':database.cookie('')})
+            if path == '/api/account/import-local':
+                if not self.user:
+                    raise MaterialError('Entre na conta antes de copiar os materiais.')
+                destination=data_path();destination.mkdir(parents=True,exist_ok=True)
+                copied=0
+                with JOB_LOCK, workspace_store.LOCK:
+                    for source in DATA.iterdir():
+                        if not re.fullmatch('[0-9a-f]{32}',source.name) or not source.is_dir() or source.is_symlink() or not (source/'analysis.json').is_file():
+                            continue
+                        if any(p.is_symlink() for p in source.rglob('*')):
+                            continue
+                        target=destination/source.name
+                        if not target.exists():
+                            stage=destination/(source.name+'.copy')
+                            try:
+                                shutil.copytree(source,stage);stage.replace(target);copied+=1
+                            finally:
+                                if stage.exists():shutil.rmtree(stage)
+                    local=workspace_store.read(DATA.parent);own=workspace_store.read(workspace_path())
+                    known={p['id'] for p in own['profiles']}
+                    own['profiles']=(own['profiles']+[p for p in local['profiles'] if p['id'] not in known])[:40]
+                    own['progress']={**local['progress'],**own['progress']}
+                    own['last_job_id']=own.get('last_job_id') or local.get('last_job_id')
+                    workspace_store.write(workspace_path(),own)
+                return self.send({'copied':copied})
+            if path == '/api/profiles/save':
+                return self.send(workspace_store.save_profile(workspace_path(),body))
+            if path == '/api/profiles/delete':
+                workspace_store.remove_profile(workspace_path(),body.get('id'))
+                return self.send({'ok':True})
+            if path == '/api/progress':
+                return self.send(workspace_store.save_progress(workspace_path(),load_job(body.get('id')),body))
             if path in {'/api/history/clear','/api/history/restore'}:
                 with JOB_LOCK:
-                    result=history_store.clear(DATA) if path.endswith('/clear') else history_store.restore(DATA,body.get('token'))
+                    result=history_store.clear(data_path()) if path.endswith('/clear') else history_store.restore(data_path(),body.get('token'))
                 return self.send(result)
             if path == '/api/demo':
                 context = {'discipline': 'Geografia', 'activity': 'Atividade de sala',

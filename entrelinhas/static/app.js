@@ -4,6 +4,9 @@ const esc = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;
 let job = null, original = null, mode = 'side', selected = 0, currentPage = 0, file = null;
 let reviewed = new Set(), dialogReturnFocus = null;
 let readingDraft=null;
+let storageScope='guest',reviewFilters={category:'all',status:'all'};
+const historyStorageKey=()=> 'entrelinhas-history-undo'+(storageScope==='guest'?'':'-'+storageScope);
+const visibleIssueIndexes=()=>job?ReviewRules.indexes(job.analysis.issues,reviewFilters,reviewed):[];
 let historyClearing=false,historyUndoToken=localStorage.getItem('entrelinhas-history-undo') || null;
 let navigationInProgress = false;
 const navigationStack=[];
@@ -11,7 +14,7 @@ let restoringPage=false;
 function currentView(){return !$('history-view').hidden?'history':!$('result-view').hidden?'result':!$('context-panel').hidden?'context':'home';}
 function rememberPage(){
   if(restoringPage)return;
-  navigationStack.push({view:currentView(),job,original,mode,selected,currentPage,file,context:context(),scrollY:window.scrollY});
+  navigationStack.push({view:currentView(),job,original,mode,selected,currentPage,file,filters:{...reviewFilters},context:context(),scrollY:window.scrollY});
   if(navigationStack.length>12)navigationStack.shift();updateBack();
 }
 function updateBack(){$('page-controls').hidden=!navigationStack.length;}
@@ -24,7 +27,7 @@ async function goBack(){
     $('start-panel').hidden=previous.view!=='home';$('context-panel').hidden=previous.view!=='context';
     $('history-view').hidden=previous.view!=='history';$('result-view').hidden=previous.view!=='result';
     setContext(previous.context);$('file-label').textContent=file?.name || '';
-    if(previous.view==='result') {await showJobContent(previous.job,false);selected=previous.selected;currentPage=previous.currentPage;render();}
+    if(previous.view==='result') {await showJobContent(previous.job,false);selected=previous.selected;currentPage=previous.currentPage;reviewFilters=previous.filters || {category:'all',status:'all'};mode=previous.mode;render();}
     else {nav(previous.view==='history'?'history':'analyze');if(previous.view==='history')await recent();}
     updateBack();message('');window.scrollTo({top:previous.scrollY,behavior:'instant'});$('main').focus({preventScroll:true});announce('Você voltou à tela anterior.');
   };
@@ -148,11 +151,12 @@ async function animateHistoryClear(rows){
 async function clearHistory(){
   if(historyClearing || navigationInProgress)return;
   historyClearing=true;navigationInProgress=true;
-  const controls=['history-clear','history-new','new-material','history-button','go-back'].map($);controls.forEach(b=>b.disabled=true);
+  const controls=['history-clear','history-new','new-material','history-button','go-back','account-button'].map($);controls.forEach(b=>b.disabled=true);
   const rows=[...document.querySelectorAll('.recent-item')];$('history-feedback').hidden=false;$('history-undo').hidden=true;$('history-status').textContent='Recolhendo seus materiais…';
   try{
+    if(typeof flushProgress==='function')await flushProgress();
     const result=await api('/api/history/clear',{});historyUndoToken=result.undo_token;
-    if(historyUndoToken)localStorage.setItem('entrelinhas-history-undo',historyUndoToken);else localStorage.removeItem('entrelinhas-history-undo');
+    if(historyUndoToken)localStorage.setItem(historyStorageKey(),historyUndoToken);else localStorage.removeItem(historyStorageKey());
     const removed=new Set(result.ids);
     navigationStack.splice(0,navigationStack.length,...navigationStack.filter(s=>!removed.has(s.job?.id) && !removed.has(s.original?.id)));
     if(removed.has(job?.id)){job=null;original=null;readingDraft=null;}
@@ -161,16 +165,16 @@ async function clearHistory(){
     try{await animateHistoryClear(rows);}catch(_){/* A visual failure never changes the saved operation. */}
     $('history-status').textContent=result.count?'Histórico limpo.':'O histórico já está vazio.';$('history-undo').hidden=!historyUndoToken;
   }catch(error){$('history-status').textContent=error.message || 'Não foi possível limpar o histórico.';$('history-undo').hidden=!historyUndoToken;}
-  finally{historyClearing=false;navigationInProgress=false;controls.forEach(b=>b.disabled=false);await recent();if(historyUndoToken)$('history-undo').focus();else $('history-new').focus();}
+  finally{historyClearing=false;navigationInProgress=false;controls.forEach(b=>b.disabled=false);await recent();if(typeof reloadWorkspace==='function')await reloadWorkspace().catch(()=>{});if(historyUndoToken)$('history-undo').focus();else $('history-new').focus();}
 }
 
 async function restoreHistory(){
   if(!historyUndoToken || historyClearing)return;
   historyClearing=true;navigationInProgress=true;
-  const controls=['history-clear','history-new','new-material','history-button','go-back'].map($);controls.forEach(b=>b.disabled=true);$('history-undo').disabled=true;
-  try{const restored=await api('/api/history/restore',{token:historyUndoToken});historyUndoToken=null;localStorage.removeItem('entrelinhas-history-undo');$('history-undo').hidden=true;$('history-status').textContent=`${restored.count} ${restored.count===1?'análise recuperada.':'análises recuperadas.'}`;}
+  const controls=['history-clear','history-new','new-material','history-button','go-back','account-button'].map($);controls.forEach(b=>b.disabled=true);$('history-undo').disabled=true;
+  try{const restored=await api('/api/history/restore',{token:historyUndoToken});historyUndoToken=null;localStorage.removeItem(historyStorageKey());$('history-undo').hidden=true;$('history-status').textContent=`${restored.count} ${restored.count===1?'análise recuperada.':'análises recuperadas.'}`;}
   catch(error){$('history-status').textContent=error.message;}
-  finally{historyClearing=false;navigationInProgress=false;controls.forEach(b=>b.disabled=false);$('history-undo').disabled=false;await recent();if(!historyUndoToken)$('history-clear').focus();}
+  finally{historyClearing=false;navigationInProgress=false;controls.forEach(b=>b.disabled=false);$('history-undo').disabled=false;await recent();if(typeof reloadWorkspace==='function')await reloadWorkspace().catch(()=>{});if(!historyUndoToken)$('history-clear').focus();}
 }
 async function showJob(next, focus=true) {
   rememberPage();
@@ -178,9 +182,14 @@ async function showJob(next, focus=true) {
   return showJobContent(next,focus);
 }
 async function showJobContent(next, focus=true) {
+  if(typeof flushProgress==='function')await flushProgress();
   job=next; original=job.root_id === job.id ? job : await api('/api/job/'+job.root_id);
-  selected=job.analysis.issues.length?0:-1; currentPage=job.analysis.issues[0]?.page ?? 0;
-  reviewed=new Set(JSON.parse(localStorage.getItem('entrelinhas-reviewed-'+job.id) || '[]'));
+  let saved;
+  try{const state=await api('/api/workspace');saved=state.progress[job.id];}catch(_){}
+  if(!saved){try{saved=JSON.parse(localStorage.getItem('entrelinhas-progress-'+storageScope+'-'+job.id) || 'null');}catch(_){}}
+  if(!saved && storageScope==='guest'){let old=[];try{old=JSON.parse(localStorage.getItem('entrelinhas-reviewed-'+job.id) || '[]');}catch(_){}saved={reviewed:old};}
+  const restored=ReviewRules.restore(job.analysis,saved);
+  selected=restored.selected;currentPage=restored.page;mode=restored.mode;reviewed=restored.reviewed;reviewFilters=restored.filters;
   localStorage.setItem('entrelinhas-last',job.id);
   $('upload-view').hidden=true; $('history-view').hidden=true; $('result-view').hidden=false; nav('analyze');
   const a=job.analysis;
@@ -198,7 +207,7 @@ async function showJobContent(next, focus=true) {
   $('assist-button').title=$('assist-button').disabled?'Não há ajustes técnicos compatíveis nesta análise.':'';
   render(); recent();
   announce(`Análise concluída. ${a.counts.attention} ${a.counts.attention===1?'ponto':'pontos'} de atenção e ${a.counts.review} ${a.counts.review===1?'item':'itens'} para revisão.`);
-  if (focus) { $('result-title').tabIndex=-1; $('result-title').focus(); window.scrollTo({top:0,behavior:'instant'}); }
+  if (focus) { $('result-title').tabIndex=-1; $('result-title').focus({preventScroll:true}); window.scrollTo({top:saved?.scroll || 0,behavior:'instant'}); }
 }
 function nav(view) {
   for (const [id,active] of [['new-material',view==='analyze'],['history-button',view==='history']]) {
@@ -286,14 +295,14 @@ async function paperFallback({direction,origin,getOrigin,covered}) {
 function blockMarkers(page,index,selectedIssue,which) {
   if (which!=='marked') return '';
   const grouped=new Map();
-  for (const issue of job.analysis.issues.filter(i=>i.page===index)) {
+  for (const issue of job.analysis.issues.filter(i=>i.page===index && ReviewRules.matches(i,reviewFilters,reviewed))) {
     const b=page.blocks.find(b=>b.id===issue.block_id);
     if (!b || b.x===undefined || grouped.has(b.id)) continue;
     grouped.set(b.id,true);
   }
   return [...grouped.keys()].map(id=>{
     const b=page.blocks.find(b=>b.id===id);
-    const issue=selectedIssue?.page===index && selectedIssue.block_id===id?selectedIssue:job.analysis.issues.find(i=>i.page===index && i.block_id===id);
+    const issue=selectedIssue?.page===index && selectedIssue.block_id===id?selectedIssue:job.analysis.issues.find(i=>i.page===index && i.block_id===id && ReviewRules.matches(i,reviewFilters,reviewed));
     const ix=job.analysis.issues.indexOf(issue);
     const active=selectedIssue && selectedIssue.block_id===id && selectedIssue.page===index;
     return `<button class="finding-marker ${active?'selected':''}" style="left:${b.x/page.width*100}%;top:${b.y/page.height*100}%;width:${Math.max(b.w/page.width*100,1)}%;height:${Math.max(b.h/page.height*100,1)}%" data-issue="${ix}" aria-label="Problema ${issue.number}: ${esc(issue.title)}"><span aria-hidden="true">${issue.number}</span></button>`;
@@ -302,7 +311,7 @@ function blockMarkers(page,index,selectedIssue,which) {
 function selectPage(index) {
   currentPage=Math.max(0,Math.min(index,job.analysis.pages.length-1));
   const issues=job.analysis.issues;
-  if(issues[selected]?.page!==null && issues[selected]?.page!==currentPage)selected=issues.findIndex(i=>i.page===currentPage);
+  if(issues[selected]?.page!==null && issues[selected]?.page!==currentPage)selected=visibleIssueIndexes().find(index=>issues[index].page===currentPage) ?? -1;
   render();announce(job.analysis.pages[currentPage].label);
 }
 function pageHTML(material,index,which='plain',large=false) {
@@ -323,7 +332,7 @@ function pageHTML(material,index,which='plain',large=false) {
     return `<div class="document-page slide" style="aspect-ratio:${page.width}/${page.height};container-type:inline-size;background:${page.background}">${blocks}${markers}</div>`;
   }
   return `<div class="document-page doc-flow" style="${page.background?'background-color:'+page.background+';':''}">${page.blocks.map(b=>{
-    const issues=which==='marked'?job.analysis.issues.filter(i=>i.page===index && i.block_id===b.id):[];
+    const issues=which==='marked'?job.analysis.issues.filter(i=>i.page===index && i.block_id===b.id && ReviewRules.matches(i,reviewFilters,reviewed)):[];
     const active=issues.length && chosen?.block_id===b.id && chosen?.page===index;
     const label=issues.length?`<span class="flow-label">${issues.map(i=>'Item '+i.number).join(' · ')} · ${esc(b.location || page.label)}</span>`:'';
     let content;
@@ -341,6 +350,7 @@ function preview(side=true) {
   return `<div class="preview-card paper-board"><div class="board-clip" aria-hidden="true"></div><div class="preview-toolbar"><span class="format-chip">${esc(job.analysis.info.format)}</span><div><button class="text-button" data-zoom="1">Ampliar ↗</button> <select id="page-select" aria-label="Selecionar página ou grupo de trechos">${options}</select></div></div><p class="preview-scope">${esc(scope)}</p><div class="preview-columns">${side?`<div class="paper-column"><div class="preview-title">Original <span>v1</span></div>${pageHTML(original,currentPage)}</div>`:''}<div class="paper-column"><div class="preview-title">Revisão <span>v${job.version}</span></div>${pageHTML(job,currentPage,'marked')}</div></div><details class="preview-note"><summary>Sobre a prévia</summary><p>${esc(job.analysis.info.preview)}</p></details></div>`;
 }
 function issueDetail(i,index,compact=false) {
+  if(!i && !visibleIssueIndexes().length && job.analysis.issues.length)return '<div class="empty-state"><h3>Nenhum item nesses filtros</h3><p>Mude o tipo ou a conferência para ver outros apontamentos.</p></div>';
   if (!i) return '<div class="empty-state"><span class="empty-flower" aria-hidden="true">✳</span><h3>Nenhum apontamento nesta página</h3><p>Escolha outro apontamento ou avance para continuar a revisão.</p></div>';
   let action='';
   if(i.image)action+=`<details class="image-check"><summary>Ver imagem</summary><img src="${esc(i.image)}" alt="Imagem sob revisão. A descrição encontrada está no painel de apontamentos.">${i.image_text?`<p><strong>Texto reconhecido:</strong> ${esc(i.image_text)}</p>`:''}</details>`;
@@ -351,19 +361,27 @@ function issueDetail(i,index,compact=false) {
   return `<div class="issue-detail"><span class="issue-category ${i.severity}"><span aria-hidden="true">${i.severity==='review'?'✳':'●'}</span> ${i.severity==='review'?'Conferência humana':'Ponto de atenção'} · ${esc(i.location)}</span><h3 tabindex="-1">${esc(i.title)}</h3><p class="issue-fact">${esc(i.explanation)}</p>${i.evidence?`<div class="evidence"><strong>${['alt_quality','alt_placeholder'].includes(i.rule)?'Descrição encontrada':'Identificado'}</strong><br>${esc(i.evidence)}</div>`:''}<p class="issue-guidance">${esc(i.suggestion)}</p>${i.text?`<details class="issue-more"><summary>Ver trecho <span aria-hidden="true">＋</span></summary><p>“${esc(i.text)}”</p></details>`:''}${action}<button class="text-button review-button" data-review="${index}" aria-pressed="${isReviewed}" title="Esta marcação pessoal não altera o diagnóstico.">${isReviewed?'✓ Conferido por mim':'Conferi este ponto'}</button>${isReviewed?'<span class="reviewed-label">Sua conferência não altera o diagnóstico.</span>':''}</div>`;
 }
 function issuePicker(issues) {
-  return issues.length?`<div class="issue-picker"><label for="issue-select">Apontamento</label><select id="issue-select" aria-label="Escolher apontamento">${selected<0?'<option value="-1" selected disabled>Nenhum nesta página</option>':''}${issues.map((i,index)=>`<option value="${index}" ${index===selected?'selected':''}>${index+1} de ${issues.length} · ${esc(i.location)} · ${esc(i.title)}</option>`).join('')}</select></div>`:'';
+  const visible=visibleIssueIndexes();
+  return visible.length?`<div class="issue-picker"><label for="issue-select">Apontamento</label><select id="issue-select" aria-label="Escolher apontamento">${selected<0?'<option value="-1" selected disabled>Nenhum nesta página</option>':''}${visible.map((index,position)=>`<option value="${index}" ${index===selected?'selected':''}>${position+1} de ${visible.length} · ${esc(issues[index].location)} · ${esc(issues[index].title)}</option>`).join('')}</select></div>`:'';
 }
 function issueControls(issues) {
-  return `<div class="step-controls" aria-label="Navegar pelos apontamentos"><button class="secondary small" data-step="-1" ${adjacentIssue(-1)<0?'disabled':''}>← Anterior</button><span class="step-counter">${selected<0?0:selected+1} / ${issues.length}</span><button class="secondary small" data-step="1" ${adjacentIssue(1)<0?'disabled':''}>Próximo →</button></div>`;
+  const visible=visibleIssueIndexes();
+  return `<div class="step-controls" aria-label="Navegar pelos apontamentos"><button class="secondary small" data-step="-1" ${adjacentIssue(-1)<0?'disabled':''}>← Anterior</button><span class="step-counter">${visible.indexOf(selected)+1} / ${visible.length}</span><button class="secondary small" data-step="1" ${adjacentIssue(1)<0?'disabled':''}>Próximo →</button></div>`;
 }
 function adjacentIssue(direction) {
   const issues=job.analysis.issues;
-  if(selected>=0){const target=selected+direction;return target>=0 && target<issues.length?target:-1;}
-  const candidates=issues.map((i,index)=>({page:i.page,index})).filter(i=>i.page!==null && (direction>0?i.page>currentPage:i.page<currentPage)).sort((a,b)=>direction*(a.page-b.page) || a.index-b.index);
-  return candidates[0]?.index ?? (direction>0?issues.findIndex(i=>i.page===null):-1);
+  const visible=visibleIssueIndexes();
+  if(selected>=0 && visible.includes(selected)){return visible[visible.indexOf(selected)+direction] ?? -1;}
+  const candidates=visible.map(index=>({page:issues[index].page,index})).filter(i=>i.page!==null && (direction>0?i.page>currentPage:i.page<currentPage)).sort((a,b)=>direction*(a.page-b.page) || a.index-b.index);
+  return candidates[0]?.index ?? (direction>0?visible.find(index=>issues[index].page===null) ?? -1:-1);
 }
 function render() {
   if (!job) return;
+  const visible=visibleIssueIndexes();
+  if(selected>=0 && !visible.includes(selected)){selected=visible[0] ?? -1;const next=job.analysis.issues[selected];if(next?.page!==null && next?.page!==undefined)currentPage=next.page;}
+  $('filter-category').value=reviewFilters.category;$('filter-status').value=reviewFilters.status;
+  $('filter-count').textContent=`${visible.length} de ${job.analysis.issues.length} itens`;
+  $('filters-clear').hidden=reviewFilters.category==='all' && reviewFilters.status==='all';
   document.querySelectorAll('.tabs [role=tab]').forEach(b=>{
     const active=b.dataset.mode===mode; b.setAttribute('aria-selected',String(active)); b.tabIndex=active?0:-1;
   });
@@ -375,6 +393,7 @@ function render() {
   } else if (mode==='step') {
     $('review-panel').innerHTML=`<div class="step-layout">${preview(false)}<div class="step-note note-card">${issuePicker(issues)}${issueDetail(issue,selected)}${issueControls(issues)}</div></div>`;
   }
+  if(typeof saveReviewProgress==='function')saveReviewProgress();
 }
 function animateReview() {
   const panel=$('review-panel');panel.getAnimations().forEach(a=>a.cancel());
@@ -393,6 +412,7 @@ function selectIssue(index,focus=false) {
   if(i) announce('Item '+i.number+': '+i.title+'. '+i.location);
 }
 function dialog(title,html) {
+  $('dialog').classList.remove('auth-dialog');
   dialogReturnFocus=document.activeElement; $('dialog-title').textContent=title;
   $('dialog-body').innerHTML=html; $('dialog').showModal();
 }
@@ -469,6 +489,7 @@ async function openExample(){
     document.removeEventListener('entrelinhas-motion',stop);document.removeEventListener('visibilitychange',stop);motionPreference.removeEventListener('change',stop);
     overlay.classList.remove('example-loading','example-ready');$('result-view').classList.remove('example-arrival');exampleOpening=false;
   }
+  if(typeof saveReviewProgress==='function')saveReviewProgress();
 }
 $('demo-button').addEventListener('click',openExample);
 $('new-material').addEventListener('click',reset);
@@ -514,7 +535,7 @@ $('review-panel').addEventListener('click',e=>{
   if(b.dataset.issue!==undefined){selectIssue(Number(b.dataset.issue));animateReview();$('issue-select')?.focus({preventScroll:true});}
   if(b.dataset.step){const target=adjacentIssue(Number(b.dataset.step));if(target>=0){selectIssue(target,true);animateReview();}}
   if(b.dataset.correct!==undefined){correction(Number(b.dataset.correct));}
-  if(b.dataset.review!==undefined){const i=job.analysis.issues[Number(b.dataset.review)];reviewed.has(i.id)?reviewed.delete(i.id):reviewed.add(i.id);localStorage.setItem('entrelinhas-reviewed-'+job.id,JSON.stringify([...reviewed]));render();document.querySelector(`[data-review="${selected}"]`)?.focus({preventScroll:true});announce(reviewed.has(i.id)?'Item marcado como conferido por você.':'Conferência desmarcada.');}
+  if(b.dataset.review!==undefined){const i=job.analysis.issues[Number(b.dataset.review)];reviewed.has(i.id)?reviewed.delete(i.id):reviewed.add(i.id);localStorage.setItem('entrelinhas-reviewed-'+job.id,JSON.stringify([...reviewed]));render();(document.querySelector(`[data-review="${selected}"]`) || $('filter-status')).focus({preventScroll:true});announce(reviewed.has(i.id)?'Item marcado como conferido por você.':'Conferência desmarcada.');}
   if(b.dataset.zoom){dialog(job.analysis.pages[currentPage].label,`<p class="muted">Prévia ampliada da versão ${job.version}. ${esc(job.analysis.info.preview)}</p>${pageHTML(job,currentPage,'marked',true)}`);}
 });
 $('assist-button').addEventListener('click',()=>{

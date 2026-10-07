@@ -1,0 +1,15 @@
+{"kind":"deck","id":"pr/31lm6t","name":"Deck"}
+{"kind":"layout","layoutId":"86a34767-7476-4cd5-905d-57c2c041b0c1","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"bce90713-4bf1-483d-818c-def9b0c34246","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/4ayah4","slide":1,"title":"Título da aula","textShapes":2}
+{"kind":"textbox","id":"sh/9sfehcnq","slide":1,"text":"Título da aula","textPreview":"Título da aula","textChars":14,"textLines":1,"bbox":[80,70,1120,110]}
+{"kind":"textbox","id":"sh/mpovmx4f","slide":1,"text":"[Disciplina e turma]\n[Nome do professor]\n[Objetivo da aula]","textPreview":"[Disciplina e turma] | [Nome do professor] | [Objetivo da aula]","textChars":59,"textLines":3,"bbox":[80,240,1120,390]}
+{"kind":"notes","id":"nt/4ayah4","slide":1,"text":"Substitua os textos entre colchetes. Preserve o título do slide e a ordem de leitura: título, conteúdo. Confira a fonte com o estudante. Se adicionar imagens informativas, escreva descrições alternativas. O modelo não certifica acessibilidade."}
+{"kind":"slide","id":"sl/eohjtk","slide":2,"title":"Tema e conceitos","textShapes":2}
+{"kind":"textbox","id":"sh/bq90nm54","slide":2,"text":"Tema e conceitos","textPreview":"Tema e conceitos","textChars":16,"textLines":1,"bbox":[80,70,1120,110]}
+{"kind":"textbox","id":"sh/cr21wr6p","slide":2,"text":"[Explique um conceito por bloco de texto.]\n\n[Use frases curtas e indique a relação entre os conceitos.]","textPreview":"[Explique um conceito por bloco de texto.] |  | [Use frases curtas e indique a relação entre os conceitos.]","textChars":103,"textLines":3,"bbox":[80,240,1120,390]}
+{"kind":"notes","id":"nt/eohjtk","slide":2,"text":"Substitua os textos entre colchetes. Preserve o título do slide e a ordem de leitura: título, conteúdo. Confira a fonte com o estudante. Se adicionar imagens informativas, escreva descrições alternativas. O modelo não certifica acessibilidade."}
+{"kind":"slide","id":"sl/h8s6zj","slide":3,"title":"Atividade","textShapes":2}
+{"kind":"textbox","id":"sh/54n6hw3q","slide":3,"text":"Atividade","textPreview":"Atividade","textChars":9,"textLines":1,"bbox":[80,70,1120,110]}
+{"kind":"textbox","id":"sh/i1cn6h4z","slide":3,"text":"[Escreva o enunciado.]\n\n[Informe como responder e quais recursos podem ser utilizados.]","textPreview":"[Escreva o enunciado.] |  | [Informe como responder e quais recursos podem ser utilizados.]","textChars":87,"textLines":3,"bbox":[80,240,1120,390]}
+{"kind":"notes","id":"nt/h8s6zj","slide":3,"text":"Substitua os textos entre colchetes. Preserve o título do slide e a ordem de leitura: título, conteúdo. Confira a fonte com o estudante. Se adicionar imagens informativas, escreva descrições alternativas. O modelo não certifica acessibilidade."}
