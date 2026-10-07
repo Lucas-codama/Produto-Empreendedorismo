@@ -50,13 +50,6 @@ def data_path():
     folder.mkdir(parents=True, exist_ok=True)
     return folder
 
-def template_catalog():
-    return [
-        {'id':'activity','filename':'Modelo_Atividade.docx','format':'Word','name':'Atividade','description':'Título, instruções e espaço para respostas.'},
-        {'id':'assessment','filename':'Modelo_Avaliacao.docx','format':'Word','name':'Avaliação','description':'Questões organizadas com títulos e texto ampliado.'},
-        {'id':'slides','filename':'Modelo_Aula.pptx','format':'PowerPoint','name':'Aula','description':'Slides com títulos, ordem de leitura e contraste alto.'},
-    ]
-
 def scoped_request(method):
     @wraps(method)
     def wrapped(self):
@@ -227,14 +220,6 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     state['resume'] = None
                 return self.send(state)
-            if path == '/api/templates':
-                return self.send(template_catalog())
-            template_match = re.fullmatch(r'/api/template/([a-z-]+)/file',path)
-            if template_match:
-                entry = next((t for t in template_catalog() if t['id']==template_match[1]),None)
-                if not entry:
-                    raise MaterialError('Modelo não encontrado.')
-                return self.send((ROOT/'templates'/entry['filename']).read_bytes(),content_type='application/octet-stream',disposition="attachment; filename*=UTF-8''"+quote(entry['filename']))
             if path == '/api/jobs':
                 records = []
                 with JOB_LOCK:

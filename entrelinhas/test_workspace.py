@@ -1,13 +1,10 @@
 import json
-from io import BytesIO
 from http.cookiejar import CookieJar
 from urllib.request import Request, build_opener, HTTPCookieProcessor
 from urllib.error import HTTPError
 from unittest.mock import patch
 import unittest
 from pathlib import Path
-from docx import Document
-from pptx import Presentation
 import server,accounts,workspace_store,test_analyzer
 
 class WorkspaceTests(unittest.TestCase):
@@ -83,19 +80,6 @@ class WorkspaceTests(unittest.TestCase):
             with self.assertRaises(HTTPError):self.api(client,'/api/profiles/save',{**body,'min_font':font})
         self.api(client,'/api/profiles/delete',dict(id=p['id']))
         self.assertNotIn(p['id'],[x['id'] for x in self.api(client,'/api/workspace')['profiles']])
-
-    def test_templates_download_with_real_headings_and_slide_titles(self):
-        client=self.client();catalog=self.api(client,'/api/templates');self.assertEqual(len(catalog),3)
-        for entry in catalog:
-            content,headers=self.request(client,'/api/template/'+entry['id']+'/file')
-            self.assertIn('attachment',headers['Content-Disposition'])
-            if entry['format']=='Word':
-                doc=Document(BytesIO(content));self.assertEqual(doc.paragraphs[0].style.name,'Title')
-                self.assertGreaterEqual(doc.styles['Normal'].font.size.pt,20)
-                self.assertTrue(any(p.style.name=='Heading 1' for p in doc.paragraphs))
-            else:
-                slides=Presentation(BytesIO(content)).slides;self.assertEqual(len(slides),3)
-                self.assertTrue(all(s.shapes.title is not None for s in slides))
 
     def test_foreign_origin_blocked_for_accounts(self):
         with self.assertRaises(HTTPError) as err:self.request(self.client(),'/api/account/login',{},headers={'Origin':'https://other.example'})

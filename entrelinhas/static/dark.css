@@ -71,7 +71,6 @@ html{scrollbar-gutter:stable}
 [data-theme=dark] .analysis-count.human{color:#e3caff;background:#3b2b4d}
 [data-theme=dark] .analysis-count.incomplete{color:#eed39e;background:#423526}
 [data-theme=dark] .history-feedback{background:#3b2b4b;color:#eee0f8}
-[data-theme=dark] .reading-item{background:#302536;border-color:#645070}
 [data-theme=dark] .back-button span,[data-theme=dark] .icon-button{background:#302536;color:#e9dbf4;border-color:#756181}
 [data-theme=dark] .message{background:#432c27;border-color:#a87259}
 [data-theme=dark] .busy-overlay{background:#100c17aa}

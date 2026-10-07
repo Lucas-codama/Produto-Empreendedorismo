@@ -3,7 +3,6 @@ const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let job = null, original = null, mode = 'side', selected = 0, currentPage = 0, file = null;
 let reviewed = new Set(), dialogReturnFocus = null;
-let readingDraft=null;
 let storageScope='guest',reviewFilters={category:'all',status:'all'};
 const historyStorageKey=()=> 'entrelinhas-history-undo'+(storageScope==='guest'?'':'-'+storageScope);
 const visibleIssueIndexes=()=>job?ReviewRules.indexes(job.analysis.issues,reviewFilters,reviewed):[];
@@ -159,7 +158,7 @@ async function clearHistory(){
     if(historyUndoToken)localStorage.setItem(historyStorageKey(),historyUndoToken);else localStorage.removeItem(historyStorageKey());
     const removed=new Set(result.ids);
     navigationStack.splice(0,navigationStack.length,...navigationStack.filter(s=>!removed.has(s.job?.id) && !removed.has(s.original?.id)));
-    if(removed.has(job?.id)){job=null;original=null;readingDraft=null;}
+    if(removed.has(job?.id)){job=null;original=null;}
     if(removed.has(localStorage.getItem('entrelinhas-last')))localStorage.removeItem('entrelinhas-last');
     updateBack();
     try{await animateHistoryClear(rows);}catch(_){/* A visual failure never changes the saved operation. */}
@@ -195,7 +194,6 @@ async function showJobContent(next, focus=true) {
   const a=job.analysis;
   $('result-title').textContent=job.filename;
   $('result-context').textContent=`${a.context.discipline} · ${a.context.activity} · Versão ${job.version}`;
-  $('download-material').href='/api/job/'+job.id+'/file';
   $('stats').innerHTML=`<span class="analysis-count"><span class="count-dot" aria-hidden="true"></span><b>${a.counts.attention}</b> ${a.counts.attention===1?'ponto de atenção':'pontos de atenção'}</span>${a.counts.review?`<span class="analysis-count human"><b>${a.counts.review}</b> para conferir</span>`:''}${a.measured.unknown_contrast?`<span class="analysis-count incomplete" title="Esses trechos não tiveram o contraste medido.">Contraste pendente em ${a.measured.unknown_contrast} ${a.measured.unknown_contrast===1?'trecho':'trechos'}</span>`:''}`;
   $('comparison').hidden=!job.comparison;
   if (job.comparison) {
@@ -320,7 +318,7 @@ function pageHTML(material,index,which='plain',large=false) {
   const chosen=job.analysis.issues[selected];
   const markers=blockMarkers(page,index,chosen,which);
   if (page.kind==='pdf') return `<div class="document-page" style="aspect-ratio:${page.width}/${page.height}"><img class="page-image" src="/api/job/${material.id}/page/${index}" alt="Imagem da ${esc(page.label)} do material. Os apontamentos estão descritos na lista de problemas.">${markers}</div>`;
-  if (page.kind==='raster') return `<div class="document-page" style="aspect-ratio:${page.width}/${page.height}"><img class="page-image" src="${esc(page.blocks.find(b=>b.image)?.image || '')}" alt="Imagem enviada; texto reconhecido disponível em Texto para leitura.">${markers}</div>`;
+  if (page.kind==='raster') return `<div class="document-page" style="aspect-ratio:${page.width}/${page.height}"><img class="page-image" src="${esc(page.blocks.find(b=>b.image)?.image || '')}" alt="Imagem enviada. Consulte os apontamentos no painel de revisão.">${markers}</div>`;
   if (page.kind==='slide') {
     const blocks=page.blocks.map(b=>{
       const style=`left:${b.x/page.width*100}%;top:${b.y/page.height*100}%;width:${b.w/page.width*100}%;height:${b.h/page.height*100}%;${b.background?'background:'+b.background+';':''}`;
@@ -417,18 +415,6 @@ function dialog(title,html) {
   dialogReturnFocus=document.activeElement; $('dialog-title').textContent=title;
   $('dialog-body').innerHTML=html; $('dialog').showModal();
 }
-function initialReading(){
-  return {title:job.filename,language:'pt-BR',items:job.analysis.pages.flatMap(p=>p.blocks.filter(b=>(b.type==='text' && b.text?.trim()) || b.image).map(b=>({id:b.id,page:p.label,text:b.type==='text'?b.text:b.alt || '',role:b.type==='text'?(b.heading?'h2':'p'):(b.decorative?'decorative':'figure'),confirmed:false})))};
-}
-function collectReading(){
-  readingDraft.title=$('reading-title').value;readingDraft.language=$('reading-language').value;
-  document.querySelectorAll('.reading-item').forEach(row=>{const item=readingDraft.items[Number(row.dataset.readingIndex)];item.text=row.querySelector('textarea').value;item.role=row.querySelector('select').value;item.confirmed=row.querySelector('input[type=checkbox]').checked;});
-}
-function renderReading(){
-  const images=new Map(job.analysis.pages.flatMap(p=>p.blocks.filter(b=>b.image).map(b=>[b.id,b.image])));
-  $('dialog-body').innerHTML=`<p>Confira o texto, as descrições e a ordem. Esta versão em HTML pode ser ampliada e lida por tecnologias assistivas; o arquivo original continua separado.</p><form id="reading-form"><label>Título<input id="reading-title" maxlength="180" required value="${esc(readingDraft.title)}"></label><label>Idioma<input id="reading-language" required value="${esc(readingDraft.language)}"></label><div class="reading-items">${readingDraft.items.map((item,index)=>`<section class="reading-item" data-reading-index="${index}"><div class="reading-item-heading"><strong>${index+1} · ${esc(item.page)}</strong><div><button class="text-button" type="button" data-reading-move="${index}" data-direction="-1" aria-label="Mover trecho ${index+1} para cima" ${index===0?'disabled':''}>↑</button><button class="text-button" type="button" data-reading-move="${index}" data-direction="1" aria-label="Mover trecho ${index+1} para baixo" ${index===readingDraft.items.length-1?'disabled':''}>↓</button></div></div>${images.has(item.id)?`<img src="${esc(images.get(item.id))}" alt="Imagem para conferir a descrição abaixo.">`:''}<label>Tipo<select>${(images.has(item.id)?[['figure','Imagem com descrição'],['decorative','Imagem decorativa']]:[['p','Parágrafo'],['h1','Título principal'],['h2','Título de seção'],['h3','Subtítulo']]).map(([value,label])=>`<option value="${value}" ${value===item.role?'selected':''}>${label}</option>`).join('')}</select></label><label>${images.has(item.id)?'Descrição':'Texto'}<textarea rows="3" maxlength="10000">${esc(item.text)}</textarea></label><label class="reading-confirm"><input type="checkbox" ${item.confirmed?'checked':''}> Conferi o conteúdo e esta posição na leitura</label></section>`).join('')}</div><div class="reading-save"><button class="primary" type="submit">Salvar leitura</button><a class="secondary" href="/api/job/${job.id}/reading" download>Baixar HTML</a><span>${job.reading?.reviewed?'Conferência do professor registrada.':'Aguardando conferência.'}</span></div><p id="reading-message" role="status"></p></form>`;
-}
-$('reading-button').addEventListener('click',()=>{readingDraft=structuredClone(job.reading || initialReading());dialog('Texto para leitura','');renderReading();});
 async function correction(index,value) {
   const issue=job.analysis.issues[index];
   if ($('dialog').open) $('dialog').close();
@@ -544,14 +530,10 @@ $('assist-button').addEventListener('click',()=>{
   dialog('Revise os ajustes antes de aplicar',`<p>Selecione os ajustes técnicos que deseja aplicar ao material. Será criada uma nova versão; o original permanece disponível.</p><form id="assist-form"><div class="assist-list">${eligible.slice(0,100).map(i=>`<label class="assist-option"><input type="checkbox" name="issues" value="${esc(i.id)}" checked><span><strong>${esc(i.title)}</strong><small>${esc(i.location)} · ${esc(i.evidence)}</small></span></label>`).join('')}</div><p>Descrições de imagens e o sentido da atividade continuam sob sua revisão. Mudanças de tamanho podem alterar o espaço ocupado pelo texto.</p><button class="primary" type="submit">Aplicar os ajustes selecionados</button></form>`);
 });
 $('dialog-body').addEventListener('submit',e=>{
-  if(e.target.id==='reading-form'){
-    e.preventDefault();collectReading();const button=e.target.querySelector('[type=submit]');button.disabled=true;
-    api('/api/reading',{id:job.id,reading:readingDraft}).then(next=>{job=next;readingDraft=structuredClone(job.reading);renderReading();$('reading-message').textContent='Leitura salva. O arquivo original foi preservado.';}).catch(error=>{$('reading-message').textContent=error.message;button.disabled=false;});return;
-  }
   if(e.target.id==='assist-form'){e.preventDefault();const selectedIssues=new FormData(e.target).getAll('issues');if(!selectedIssues.length)return;
     $('dialog').close();run(async()=>showJob(await api('/api/assist',{id:job.id,issues:selectedIssues})),'Aplicando os ajustes e verificando a nova versão');}
 });
-$('dialog-body').addEventListener('click',e=>{const move=e.target.closest('[data-reading-move]');if(move){collectReading();const index=Number(move.dataset.readingMove),next=index+Number(move.dataset.direction);[readingDraft.items[index],readingDraft.items[next]]=[readingDraft.items[next],readingDraft.items[index]];renderReading();document.querySelector(`[data-reading-move="${next}"][data-direction="${move.dataset.direction}"]`)?.focus();return;}const b=e.target.closest('[data-issue]');if(b){$('dialog').close();selectIssue(Number(b.dataset.issue),true);}});
+$('dialog-body').addEventListener('click',e=>{const b=e.target.closest('[data-issue]');if(b){$('dialog').close();selectIssue(Number(b.dataset.issue),true);}});
 $('close-dialog').addEventListener('click',()=>$('dialog').close());
 $('dialog').addEventListener('close',()=>dialogReturnFocus?.isConnected && dialogReturnFocus.focus());
 if(historyUndoToken){$('history-feedback').hidden=false;$('history-status').textContent='Você pode desfazer a última limpeza.';$('history-undo').hidden=false;}

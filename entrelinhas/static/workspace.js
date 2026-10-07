@@ -70,13 +70,6 @@ window.addEventListener('pagehide',()=>{
   const body=JSON.stringify(snapshot);if(body.length<60000)fetch('/api/progress',{method:'POST',headers:{'Content-Type':'application/json'},body,keepalive:true}).catch(()=>{});
 });
 
-$('templates-button').addEventListener('click',async()=>{
-  try{
-    const templates=await api('/api/templates');
-    dialog('Comece por um modelo',`<p>Edite o conteúdo e confira as necessidades do estudante antes de analisar.</p><div class="template-list">${templates.map(t=>`<a class="template-item" href="/api/template/${t.id}/file" download><span class="template-format">${esc(t.format)}</span><div><strong>${esc(t.name)}</strong><p>${esc(t.description)}</p></div><span aria-hidden="true">↓</span></a>`).join('')}</div>`);
-  }catch(error){message(error.message);}
-});
-
 function mascots(){return `<div class="mascot-stage" data-gaze="idle" aria-hidden="true"><div class="mascot-orbit"></div><div class="mascot-ground"></div><div class="mascot-group">${[1,3,2].map(n=>`<div class="pill-mascot pill-${n}"><div class="mascot-body">${n===1?'<span class="mascot-curl"></span><span class="mascot-badge">✳</span>':n===3?'<span class="mascot-headphones"><i></i><i></i></span>':''}<div class="mascot-face"><div class="mascot-eyes"><i><span></span></i><i><span></span></i></div><b class="mascot-smile"></b><span class="mascot-cheek cheek-left"></span><span class="mascot-cheek cheek-right"></span></div><div class="mascot-hand hand-left"><i></i><i></i><i></i></div><div class="mascot-hand hand-right"><i></i><i></i><i></i></div><span class="mascot-foot left"></span><span class="mascot-foot right"></span></div></div>`).join('')}</div><span class="mascot-star">✳</span><span class="mascot-spark">✦</span></div>`;}
 let stopMascotTracking=()=>{};
 function startMascotTracking(){

@@ -21,11 +21,10 @@ Em outro computador, use Python 3.11 ou superior e instale as dependências de `
 3. Explore **Lado a lado** e **Passo a passo**. A explicação e a evidência de cada apontamento ficam junto à prévia. Use os filtros de tipo e conferência para restringir lista e marcações.
 4. Em arquivos DOCX e PPTX, ajuste fonte, cor do texto e descrição de imagens. Cada edição gera uma nova versão, preservando o original.
 5. Use **Ajustes sugeridos** para selecionar ajustes técnicos de fonte e contraste. Descrições não são inventadas automaticamente.
-6. Baixe o arquivo revisado, abra no Word ou PowerPoint e confira layout e conteúdo.
-7. Você pode editar externamente e usar **Nova versão**. A comparação mostra itens persistentes, novos e não reencontrados.
-8. Consulte materiais anteriores na aba **Histórico**. **Limpar histórico** recolhe os cartões para a lixeira com uma explosão de formas. **Desfazer** recupera os materiais e suas versões, inclusive após recarregar a página. A animação respeita movimento reduzido e o controle de pausa. O relatório HTML continua disponível na API, sem um modo de relatório na interface.
+6. Edite seu documento no Word, PowerPoint ou outro editor e clique em **Testar nova versão** para enviar o arquivo corrigido. A comparação mostra itens persistentes, novos e não reencontrados.
+7. Consulte materiais anteriores na aba **Histórico**. **Limpar histórico** recolhe os cartões para a lixeira com uma explosão de formas. **Desfazer** recupera os materiais e suas versões, inclusive após recarregar a página. A animação respeita movimento reduzido e o controle de pausa. O relatório HTML continua disponível na API, sem um modo de relatório na interface.
 
-Arquivos de exemplo também estão em `examples/Atividade_Geografia.pptx` e `examples/Atividade_Geografia.docx` para testar o envio pelo formulário.
+O botão **Abrir um exemplo** gera o material no servidor; não depende de arquivos de exemplo armazenados no projeto.
 
 ## Verificações efetivamente implementadas
 
@@ -45,7 +44,7 @@ Arquivos de exemplo também estão em `examples/Atividade_Geografia.pptx` e `exa
 - O PDF é mostrado por uma imagem renderizada do próprio arquivo. Uma imagem de página na interface não representa por si só uma versão acessível do conteúdo.
 - OCR clássico local foi integrado para imagens e PDFs digitalizados, com dados de português e inglês. A ativação depende de instalar Tesseract. Neste computador a instalação foi cancelada pelo Windows; o teste real fica pendente até a instalação ser autorizada e concluída. Não é usado um modelo generativo ou API externa.
 - O texto reconhecido e seu contraste por pixels são estimados e exigem revisão. Altura do texto em uma imagem não é convertida em tamanho físico de fonte.
-- O botão **Texto para leitura** permite revisar transcrições, ordenar trechos, definir títulos e descrever imagens. Salva uma versão HTML separada, com idioma e confirmação individual. Isso não modifica nem certifica as tags do PDF original.
+- A tela de verificação apresenta os apontamentos e permite reenviar o documento pelo botão **Testar nova versão**. Os atalhos de texto para leitura e download foram retirados da interface.
 - O motor não interpreta o sentido de gráficos, fórmulas, mapas ou avaliações e não assegura que uma descrição esteja correta.
 - A revisão automática do Word inclui corpo, células, cabeçalhos, rodapés, notas, caixas de texto e hyperlinks. As correções preservam as partes originais do pacote; a prévia não reproduz a paginação ou sobreposições do Word.
 - Aumentar fontes pode mudar o layout. A plataforma pede revisão do resultado no programa original.
@@ -120,12 +119,6 @@ Execute `Instalar_OCR.ps1` somente quando desejar ativar o recurso e confirme a 
 Os filtros **Tipo** e **Conferência** afetam os apontamentos, Anterior/Próximo e as marcações na prévia, nos dois modos. Marcar **Conferi este ponto** é uma anotação do professor e não altera o diagnóstico técnico.
 
 A página, o apontamento, o modo, os filtros, os itens conferidos e a rolagem são gravados no servidor em `workspace.json`. Há uma cópia de apoio no navegador. **Continuar revisão**, na página inicial, retoma o último material disponível. O salvamento é automático; trocar de conta aguarda a gravação pendente.
-
-## Modelos
-
-**Modelos**, na página inicial, oferece uma atividade em DOCX, uma avaliação em DOCX e três slides em PPTX. São arquivos editáveis com título, estrutura de seções, idioma, fontes maiores e texto preto sobre branco. Não possuem imagens informativas sem descrição. Ajuste o tamanho conforme o estudante e analise o conteúdo depois de editar.
-
-Os modelos Word tiveram estrutura e fontes verificadas e uma prévia aproximada de cada página inspecionada com Aspose FOSS local. O renderizador canônico `render_docx.py` não executou porque este ambiente não contém LibreOffice; a paginação nativa do Word permanece sem validação. As prévias de QA não são distribuídas. Os três slides finais foram renderizados e inspecionados; o pacote PPTX passou pelas validações de estrutura, geometria, fontes e reimportação.
 
 ## Contas opcionais
 

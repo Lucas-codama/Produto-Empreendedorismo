@@ -254,6 +254,9 @@ dialog{border-radius:28px;padding:30px;background:#fffaf6}.dialog-heading h2{fon
 .preview-toolbar>div{flex-wrap:wrap;gap:12px}
 .paper-column{min-width:0}
 .result-name h1,.result-heading p{overflow-wrap:anywhere}
+.result-actions #upload-revision{display:inline-flex;align-items:center;justify-content:center;gap:12px;white-space:nowrap}
+.result-heading .result-actions{max-width:none}
+.result-actions #upload-revision svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .step-controls{flex-wrap:wrap;row-gap:14px}
 @media(max-width:600px){.preview-toolbar{flex-wrap:wrap}.preview-toolbar select{max-width:100%}.preview-columns{gap:28px}.preview-scope{margin-bottom:20px}.review-grid,.step-layout{gap:30px}}
 .analysis-count.incomplete{background:#efe6d7;color:#805f31}
