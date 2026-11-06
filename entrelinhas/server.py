@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
 import json
 import mimetypes
+import os
 from pathlib import Path
 import re
 import shutil
@@ -182,7 +183,10 @@ def report(job):
 
 class Handler(BaseHTTPRequestHandler):
     def valid_host(self):
-        return self.headers.get('Host') in {f'127.0.0.1:{self.server.server_port}', f'localhost:{self.server.server_port}'}
+        if os.environ.get('ALLOW_REMOTE', 'true').lower() in {'true', '1', 'yes'} or os.environ.get('RENDER'):
+            return True
+        host = self.headers.get('Host', '')
+        return host in {f'127.0.0.1:{self.server.server_port}', f'localhost:{self.server.server_port}'}
 
     def log_message(self, *_):
         pass
@@ -284,7 +288,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send({'error': 'Abra este serviço pelo endereço local.'}, 403)
         try:
             origin = self.headers.get('Origin')
-            allowed = {'http://'+self.headers.get('Host', '')}
+            host = self.headers.get('Host', '')
+            allowed = {f'http://{host}', f'https://{host}'}
             if origin and origin not in allowed:
                 return self.send({'error': 'Essa operação deve ser feita no site local.'}, 403)
             if self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
@@ -391,7 +396,8 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--port', type=int, default=8765)
+    default_port = int(os.environ.get('PORT', 8765))
+    parser.add_argument('--port', type=int, default=default_port)
     args = parser.parse_args()
     DATA.mkdir(parents=True, exist_ok=True)
     server = ThreadingHTTPServer(('0.0.0.0', args.port), Handler)
