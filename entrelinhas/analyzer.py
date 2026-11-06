@@ -3,9 +3,7 @@ from __future__ import annotations
 
 import base64
 import colorsys
-from collections import Counter
 from io import BytesIO
-from pathlib import Path
 import re
 import zipfile
 import xml.etree.ElementTree as ET
@@ -14,10 +12,9 @@ from PIL import Image
 from docx import Document
 from docx.text.paragraph import Paragraph
 from pptx import Presentation
-from pptx.enum.dml import MSO_COLOR_TYPE, MSO_FILL_TYPE
+from pptx.enum.dml import MSO_FILL_TYPE
 from pptx.util import Pt
 import pdfplumber
-import pypdfium2 as pdfium
 from pypdf import PdfReader
 import document_parts
 from vision_checks import PdfPixels, PDF_LOCK, ocr_blocks, ocr
@@ -280,10 +277,6 @@ def parse_pptx(path):
         pages.append(page)
     return pages,{'preview':'Prévia reconstruída. Fontes, temas e efeitos complexos podem diferir do PowerPoint.','format':'PPTX','editable':True}
 
-def doc_paragraphs(doc):
-    return [Paragraph(el, doc) for el in doc.element.body.iter() if el.tag == '{'+NS['w']+'}p']
-
-
 def doc_font(run, paragraph, doc, palette=None, default_bg='#FFFFFF'):
     candidates = [run.font]
     character_style = run.style
@@ -377,7 +370,6 @@ def parse_docx(path):
     pages = []
     blocks = []
     image_index = 0
-    unreviewed_parts = []
     backgrounds = doc.element.xpath('./w:background')
     default_bg = '#FFFFFF'
     if backgrounds:
@@ -434,7 +426,7 @@ def parse_docx(path):
     if blocks or not pages:
         pages.append({'label': 'Trechos '+str(len(pages)+1), 'kind': 'flow', 'blocks': blocks,
                       'width': 595, 'height': 842, 'background': default_bg})
-    return pages, {'format': 'DOCX', 'editable': True, 'has_tables': has_tables, 'unreviewed_parts': unreviewed_parts,
+    return pages, {'format': 'DOCX', 'editable': True, 'has_tables': has_tables,
                    'preview': 'Prévia dos trechos extraídos. Os números de parágrafo identificam o conteúdo; não representam páginas do Word.'}
 
 
@@ -576,7 +568,6 @@ def parse_pdf(path):
                           'has_text': bool(words), 'ocr_error':ocr_error,'ocr_text':' '.join(b['text'] for b in blocks if b.get('ocr')), 'page_index': index})
             if pixels is not None:
                 with PDF_LOCK:pixels.close()
-    root = reader.trailer['/Root']
     return pages, {'format': 'PDF', 'editable': False, 'tagged': structure['tagged'],
                    'structure_findings':structure['findings'],'structure_elements':structure['elements'],'reading_order':structure['reading_order'],
                    'preview': 'Imagem do PDF original. Marcações indicam posições extraídas; conferir a estrutura e a ordem de leitura exige revisão.'}
@@ -747,11 +738,6 @@ def analyze(path, context):
     if info.get('has_tables'):
         add('table_review', 'Conferir a estrutura das tabelas', 'O documento contém tabelas. A inspeção não confirmou a associação entre cada célula e seus cabeçalhos.',
             'No arquivo de origem, defina a linha de cabeçalho. Com um leitor de tela, confira se cada célula é anunciada com o cabeçalho correspondente.', None, severity='review')
-    if info.get('unreviewed_parts'):
-        add('content_unchecked', 'Há conteúdo fora da análise de trechos',
-            'Os elementos listados abaixo ficaram fora da análise automática de texto e formatação.',
-            'Abra esses elementos no Word e confira o conteúdo, a descrição e a leitura com os recursos do estudante.',
-            None, severity='review', evidence='Não analisado: '+', '.join(info['unreviewed_parts'])+'.')
     issues.sort(key=lambda i: (i['severity'] == 'review', i['page'] if i['page'] is not None else -1, i['id']))
     for index, issue in enumerate(issues):
         issue['number'] = index + 1
@@ -759,8 +745,8 @@ def analyze(path, context):
         if issue['rule']=='contrast_unknown':
             issue['explanation']='Não foi possível medir com confiança o contraste de alguns trechos desta página. Eles continuam sem resultado de contraste.'
     checks = [
-        {'name': 'Contraste de texto', 'detail': f"{measured['contrast']} trechos medidos, sendo {measured['estimated_contrast']} por imagem renderizada; {measured['unknown_contrast']} sem cálculo confiável.", 'state': 'partial' if measured['estimated_contrast'] or measured['unknown_contrast'] or not measured['contrast'] or info.get('unreviewed_parts') else 'checked'},
-        {'name': 'Tamanho da fonte', 'detail': f"Preferência: {minimum:g} pt. {measured['font']} blocos medidos." if minimum else 'Informe uma preferência do estudante para comparar os tamanhos.', 'state': 'partial' if not minimum or measured['unknown_font'] or not measured['font'] or info.get('unreviewed_parts') else 'checked'},
+        {'name': 'Contraste de texto', 'detail': f"{measured['contrast']} trechos medidos, sendo {measured['estimated_contrast']} por imagem renderizada; {measured['unknown_contrast']} sem cálculo confiável.", 'state': 'partial' if measured['estimated_contrast'] or measured['unknown_contrast'] or not measured['contrast'] else 'checked'},
+        {'name': 'Tamanho da fonte', 'detail': f"Preferência: {minimum:g} pt. {measured['font']} blocos medidos." if minimum else 'Informe uma preferência do estudante para comparar os tamanhos.', 'state': 'partial' if not minimum or measured['unknown_font'] or not measured['font'] else 'checked'},
         {'name': 'Descrições de imagens', 'detail': f"{measured['images']} elementos de imagem identificados. O significado exige revisão humana.", 'state': 'partial'},
         {'name': 'Estrutura e significado', 'detail': 'A ordem de leitura, o sentido dos gráficos e a preservação da atividade precisam ser conferidos.', 'state': 'review'},
     ]

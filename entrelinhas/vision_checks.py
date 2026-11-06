@@ -12,7 +12,7 @@ import tempfile
 import threading
 import ctypes
 import numpy as np
-from PIL import Image, ImageOps
+from PIL import ImageOps
 import pypdfium2 as pdfium
 
 ROOT=Path(__file__).resolve().parent

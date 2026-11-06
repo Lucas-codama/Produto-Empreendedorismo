@@ -2,7 +2,6 @@
 import posixpath
 import re
 import zipfile
-from io import BytesIO
 from docx import Document
 from docx.oxml import parse_xml
 from docx.oxml.ns import qn

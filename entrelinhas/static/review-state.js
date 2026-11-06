@@ -25,4 +25,3 @@ const ReviewRules=(()=>{
   }
   return {category,matches,indexes,restore};
 })();
-if(typeof module!=='undefined')module.exports=ReviewRules;

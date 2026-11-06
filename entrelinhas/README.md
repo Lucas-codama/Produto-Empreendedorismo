@@ -1,133 +1,49 @@
 # Entrelinhas
 
-Plataforma de análise de acessibilidade de documentos e apresentações. Ajuda professores a compreender barreiras, corrigir itens compatíveis e revisar versões.
+Aplicação local para analisar barreiras de acessibilidade em documentos e apresentações, revisar os apontamentos e aplicar ajustes compatíveis.
 
-## Como abrir
+## Executar
 
-Neste computador, dê dois cliques em **Iniciar.cmd**. Ele utiliza o Python já disponível no ambiente do Codex e abre **http://127.0.0.1:8765** no navegador. Se o servidor já estiver ativo, o atalho reutiliza o serviço.
+Abra `Iniciar.cmd`. O serviço inicia em http://127.0.0.1:8765 e abre o navegador.
 
-Para executar manualmente:
-
-```powershell
-& 'C:\Users\Lucas\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' server.py
-```
-
-Em outro computador, use Python 3.11 ou superior e instale as dependências de `requirements.txt`. O servidor utiliza a biblioteca padrão do Python e não depende de uma conta ou chave de IA.
-
-## Fluxo de uso
-
-1. Clique em **Abrir um exemplo** para analisar uma atividade real em PPTX com contexto fictício e barreiras conhecidas. Você também pode enviar um arquivo próprio.
-2. Clique em **Escolher arquivo**. Para materiais próprios, informe disciplina, tipo de atividade, necessidades e tecnologias assistivas. O tamanho de fonte preferido é opcional e deve refletir o estudante.
-3. Explore **Lado a lado** e **Passo a passo**. A explicação e a evidência de cada apontamento ficam junto à prévia. Use os filtros de tipo e conferência para restringir lista e marcações.
-4. Em arquivos DOCX e PPTX, ajuste fonte, cor do texto e descrição de imagens. Cada edição gera uma nova versão, preservando o original.
-5. Use **Ajustes sugeridos** para selecionar ajustes técnicos de fonte e contraste. Descrições não são inventadas automaticamente.
-6. Edite seu documento no Word, PowerPoint ou outro editor e clique em **Testar nova versão** para enviar o arquivo corrigido. A comparação mostra itens persistentes, novos e não reencontrados.
-7. Consulte materiais anteriores na aba **Histórico**. **Limpar histórico** recolhe os cartões para a lixeira com uma explosão de formas. **Desfazer** recupera os materiais e suas versões, inclusive após recarregar a página. A animação respeita movimento reduzido e o controle de pausa. O relatório HTML continua disponível na API, sem um modo de relatório na interface.
-
-O botão **Abrir um exemplo** gera o material no servidor; não depende de arquivos de exemplo armazenados no projeto.
-
-## Verificações efetivamente implementadas
-
-| Verificação | Cobertura |
-|---|---|
-| Contraste do texto | Cálculo de luminância quando as cores do texto e do fundo são conhecidas. Referência WCAG de 4,5:1 para texto comum e 3:1 para texto grande. Cores herdadas não resolvidas, fundo de imagem, transparências e composição complexa são encaminhados para revisão. |
-| Tamanho da fonte | Compara os tamanhos identificados à preferência informada. Nenhum mínimo universal é presumido. |
-| Descrição de imagens | Inspeciona os metadados em DOCX/PPTX; aponta ausência e alguns nomes genéricos. Descrições existentes continuam sujeitas à conferência de sentido. |
-| PDF | Extrai texto, posições, tamanho e cor; mede fundos complexos pela renderização e inspeciona árvore vazia, referências MCID, saltos de títulos, figuras sem descrição, idioma e tabelas sem cabeçalho. A ordem semântica exige conferência. |
-| Slides | Verifica presença de título e encaminha elementos complexos para revisão. |
-| Versões | Cada correção ou reenvio gera uma análise nova. A comparação usa regra e localização; deslocamentos no arquivo podem modificar a correspondência. |
-
-## Cobertura e limites
-
-- Aceita **PDF, DOCX, PPTX, PNG e JPG**, até **20 MB**. PDF/PPTX: até 60 páginas/slides. DOCX: até 2.000 parágrafos. Documentos muito complexos podem exigir divisão.
-- As prévias DOCX e PPTX são reconstruções. DOCX mostra grupos de trechos e números de parágrafos, não a paginação do Word. PPTX não reproduz completamente fontes, temas, grupos, objetos e efeitos.
-- O PDF é mostrado por uma imagem renderizada do próprio arquivo. Uma imagem de página na interface não representa por si só uma versão acessível do conteúdo.
-- OCR clássico local foi integrado para imagens e PDFs digitalizados, com dados de português e inglês. A ativação depende de instalar Tesseract. Neste computador a instalação foi cancelada pelo Windows; o teste real fica pendente até a instalação ser autorizada e concluída. Não é usado um modelo generativo ou API externa.
-- O texto reconhecido e seu contraste por pixels são estimados e exigem revisão. Altura do texto em uma imagem não é convertida em tamanho físico de fonte.
-- A tela de verificação apresenta os apontamentos e permite reenviar o documento pelo botão **Testar nova versão**. Os atalhos de texto para leitura e download foram retirados da interface.
-- O motor não interpreta o sentido de gráficos, fórmulas, mapas ou avaliações e não assegura que uma descrição esteja correta.
-- A revisão automática do Word inclui corpo, células, cabeçalhos, rodapés, notas, caixas de texto e hyperlinks. As correções preservam as partes originais do pacote; a prévia não reproduz a paginação ou sobreposições do Word.
-- Aumentar fontes pode mudar o layout. A plataforma pede revisão do resultado no programa original.
-- A verificação é parcial. Não emite certificado, percentual de acessibilidade ou nota de aprendizado do professor.
-
-## Arquivos e privacidade local
-
-O servidor escuta somente em **127.0.0.1**. Os arquivos e resultados ficam em **.runtime/jobs/** neste computador. Não são enviados a serviços externos. As análises persistem entre reinícios e aparecem no Histórico. O original é mantido, e cada revisão é gravada separadamente.
-
-Para encerrar um servidor iniciado pelo atalho, execute `Parar.ps1`. A limpeza pelo Histórico move as análises para `.runtime/trash`, sem apagá-las definitivamente. O botão Desfazer recupera a última limpeza; seu identificador fica salvo neste navegador.
-
-## Testes de desenvolvimento
+O atalho procura o Python do ambiente local do Codex e, se ele não estiver disponível, usa o Python instalado no PATH. Em outro computador, instale Python 3.11 ou superior e as dependências:
 
 ```powershell
-& 'C:\Users\Lucas\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m unittest discover -v
-& 'C:\Users\Lucas\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe' --test test_review_state.cjs
+python -m pip install -r requirements.txt
+python server.py
 ```
 
-A suíte verifica contraste, parâmetros individuais, arquivos corrompidos, posições do PDF, descrições, preservação do original, correções reais nos arquivos, exportação, relatório e o ciclo HTTP de análise/revisão. Esses testes técnicos não substituem os testes planejados com professores, estudante e especialista.
+Para encerrar o servidor iniciado pelo atalho, execute `Parar.ps1`.
 
-## Referências técnicas
+## Recursos
 
-- [W3C: contraste mínimo](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html).
-- [python-docx: texto e formatação](https://python-docx.readthedocs.io/en/latest/user/text.html).
-- [python-pptx: objetos de texto](https://python-pptx.readthedocs.io/en/latest/api/text.html).
-- [Tesseract: modo clássico e modos de reconhecimento](https://tesseract-ocr.github.io/tessdoc/Command-Line-Usage.html).
-- [W3C: ordem de leitura de PDF](https://www.w3.org/WAI/WCAG22/Techniques/pdf/PDF3).
-- [W3C: descrição alternativa em tags de PDF](https://www.w3.org/WAI/WCAG22/Techniques/pdf/PDF1).
+- Análise de PDF, DOCX, PPTX, PNG e JPG de até 20 MB.
+- Até 60 páginas/slides em PDF/PPTX e 2.000 parágrafos em DOCX.
+- Verificações de contraste, tamanho de fonte informado, descrições de imagens e aspectos de estrutura.
+- Revisão lado a lado ou passo a passo, com filtros, evidências e conferência pessoal.
+- Ajustes de fonte, contraste e descrições em DOCX/PPTX, preservando o original em novas versões.
+- Histórico com limpeza reversível e retomada de materiais próprios.
+- Exemplo interativo separado do histórico e da retomada.
+- Perfis reutilizáveis de necessidades e tecnologias assistivas.
+- Contas locais opcionais, login por e-mail ou nome e edição do nome/e-mail.
+- Temas claro/escuro, pausa de animações e suporte a movimento reduzido.
 
-O planejamento acadêmico permanece em `../output/Planejamento_Desenvolvimento_do_Produto.md` e no PDF preenchido em `../output/pdf/`.
+## Armazenamento
 
-## Interface
+O serviço escuta apenas em `127.0.0.1`. Os arquivos não são enviados a serviços externos durante a análise. Não há sincronização entre dispositivos.
 
-A navegação reúne Analisar e Histórico. O formulário aparece após a escolha do arquivo. A página inicial usa uma cena de documentos em WebGL com Three.js; há uma composição em CSS quando WebGL não está disponível. A animação pausa fora da tela e respeita a preferência por movimento reduzido. O controle no topo permite pausar manualmente.
+A pasta `.runtime` contém os materiais, contas, perfis, posições de revisão e lixeira. Preserve essa pasta para manter os dados. As senhas são armazenadas como hashes com sal; a aplicação não dispõe de recuperação de senha ou confirmação de e-mail.
 
-Fredoka e Nunito são distribuídas sob a licença SIL Open Font License. Three.js usa licença MIT. As fontes, o módulo e as respectivas licenças estão em static/assets; a interface não consulta CDN ou serviço externo.
+## Limitações
 
-O botão de lua/sol no topo alterna os temas claro e escuro. A escolha fica salva no navegador; antes de uma escolha, o site acompanha a preferência do sistema. O tema é aplicado antes da primeira renderização. As cores do material em análise permanecem originais, inclusive na prévia do Word, para não esconder problemas de contraste.
+A análise utiliza regras locais e não certifica acessibilidade integral. Significado de descrições, gráficos, fórmulas, ordem de leitura e adequação pedagógica exigem revisão humana. A preferência de fonte é individual, sem um mínimo universal presumido.
 
-A troca manual revela o novo tema por uma onda de tinta que parte do botão, com pontas arredondadas e gotas absorvidas pela frente. Usa snapshots nativos quando disponíveis e uma onda pintada em canvas nos demais navegadores. A cena 3D pausa durante a troca para evitar saltos e usa uma sombra suave, sem a silhueta rígida no fundo. Pausa de animações, movimento reduzido, mudança de tamanho e interação com outros controles encerram a transição sem bloquear a interface.
+As prévias de Word e PowerPoint são reconstruções e podem diferir do programa original. Ajustes de fonte podem modificar o layout. PDF e imagens não recebem correções diretas no arquivo pela interface.
 
-A revisão usa uma prancheta com sombras, folhas e animações leves. O histórico apresenta uma transição de aproximação e afastamento da cena 3D. Ao pausar animações ou preferir movimento reduzido, a navegação ocorre diretamente. A cobertura não é exibida como seção na interface; as verificações continuam funcionando no analisador.
+O reconhecimento de texto depende do Tesseract. Para instalar, execute `Instalar_OCR.ps1`. O processamento usa dados de português e inglês e o modo clássico `--oem 0`; transcrições e contraste por pixels precisam de conferência. O instalador precisa de internet para obter o programa e os idiomas.
 
-Ao abrir o exemplo, uma pequena pilha de folhas sobe com uma barra de carregamento. A barra permanece indeterminada durante a preparação e só indica conclusão quando a revisão estiver pronta. A análise entra de baixo, sem reiniciar a animação ao terminar. Pausa e movimento reduzido levam diretamente ao conteúdo.
+A API também oferece download dos materiais, relatório HTML e documento complementar de leitura.
 
-Ao concluir a análise de um envio ou de uma nova versão, aparece uma confirmação breve com um visto desenhado e “Análise concluída”. Ela confirma o fim do processamento, inclusive quando há barreiras encontradas. A revisão entra suavemente e o carregamento permanece invisível até a transição terminar. Erros não mostram a confirmação; pausa e movimento reduzido abrem diretamente o resultado.
+## Recursos distribuídos
 
-A transição da prancheta controla também a entrada das telas de destino, evitando sobreposição com outra animação de entrada. Na saída, a cena volta ao seu contêiner no mesmo quadro em que chega à posição final, sem pausa e nova animação. O caminho em CSS usa uma cópia do elemento de origem/destino quando WebGL não está disponível.
-
-## Motor de verificação e navegação
-
-O contraste em PDF considera fundos retangulares de cor uniforme e separa trechos quando o fundo muda. Fundos complexos, transparências e CMYK usam renderização em RGB do original e uma cópia em memória sem objetos de texto. O pior contraste amostrado é identificado como estimativa; o arquivo fonte permanece intacto. Em DOCX, são considerados realces por trecho, sombreamentos e cores de tema. Em PPTX, são analisados textos agrupados e textos de tabelas, além de caixas sobre retângulos sólidos. As correções de cor são aplicadas apenas aos trechos que falharam, usando o fundo de cada trecho.
-
-As análises salvas são recalculadas quando a versão do motor muda, sem modificar os materiais originais. O botão Voltar restaura a tela, a página e o modo de revisão anteriores durante a sessão.
-
-Os dois modos de revisão têm Anterior e Próximo. Escolher um apontamento abre sua página e destaca o elemento identificado; escolher uma página seleciona um apontamento dela ou informa que não há um específico. Conferências do documento inteiro mantêm esse escopo explícito enquanto o professor percorre as páginas. A marcação pessoal e a posição são preservadas ao trocar de modo. As explicações apresentam o resultado concreto e a ação correspondente; descrições existentes ficam visíveis no painel.
-
-A aplicação utiliza verificações por regras, sem integração de IA generativa ou agente de IA. A suíte contém 60 testes, incluindo regressões de texto branco sobre fundo amarelo, realces mistos, tabelas, grupos, degradês, CMYK, transparência, conteúdo fora do corpo do Word, estrutura do PDF, versão HTML e limpeza/recuperação do histórico. Bordas e sublinhados não são tratados como fundo dos caracteres; a renderização sem texto é regenerada após remover os objetos. O teste com OCR real é pulado quando o executável não está instalado; os demais continuam sendo executados.
-
-O arquivo `../output/Teste_Acessibilidade/Teste_Acessibilidade_10_Paginas.pdf` contém nove casos adversos e uma página de controle. Use a preferência de fonte de 20 pt para reproduzir os apontamentos de tamanho. `Gabarito.md`, na mesma pasta, explica o que deve ser detectado e o que exige revisão humana. `build_accessibility_fixture.py` recria o PDF e registra a análise real. Os apontamentos de figuras, títulos e tabelas do PDF agora carregam a página correspondente.
-
-`python audit_capabilities.py` executa mais 19 casos com documentos adversos. A tabela de resultados e as evidências ficam em `../output/Auditoria_Verificacoes.md` e `../output/Auditoria_Verificacoes.json`. Há casos de funcionalidades confirmadas e casos que confirmam limites; esses resultados não equivalem a uma certificação de acessibilidade.
-
-## Reconhecimento de texto em imagens
-
-Execute `Instalar_OCR.ps1` somente quando desejar ativar o recurso e confirme a janela do Windows. O aplicativo procura o executável em `.runtime/tools/tesseract`, em `C:/Program Files/Tesseract-OCR` ou no PATH. Os dados de idioma ficam em `.runtime/tools/tessdata`. O processamento usa o modo clássico `--oem 0`, sem rede neural LSTM, e não faz upload dos materiais. O texto é obtido de uma cópia com contraste realçado; as medições usam sempre os pixels originais. Imagens e transcrições não são aprovadas automaticamente.
-
-## Perfis e retomada
-
-**Meus perfis**, no menu de conta, e **Gerenciar**, no formulário, permitem criar, editar e remover perfis. Um perfil guarda necessidades, tecnologias e fonte preferida; disciplina e atividade continuam sendo informadas para cada material. Escolher um perfil preenche o formulário e permite revisar os valores antes da análise.
-
-Os filtros **Tipo** e **Conferência** afetam os apontamentos, Anterior/Próximo e as marcações na prévia, nos dois modos. Marcar **Conferi este ponto** é uma anotação do professor e não altera o diagnóstico técnico.
-
-A página, o apontamento, o modo, os filtros, os itens conferidos e a rolagem são gravados no servidor em `workspace.json`. Há uma cópia de apoio no navegador. **Continuar revisão**, na página inicial, retoma o último material disponível. O salvamento é automático; trocar de conta aguarda a gravação pendente.
-
-## Contas opcionais
-
-O site funciona sem conta. **Entrar** permite criar uma conta local com nome, e-mail e senha de 8 a 128 caracteres. Os três personagens acompanham o ponteiro e cobrem os olhos quando a senha é exibida; só o personagem da frente espreita por entre os dedos; a animação respeita o controle de pausa e movimento reduzido. Nenhuma animação lê o conteúdo da senha.
-
-As senhas usam scrypt com sal aleatório; tokens de sessão são aleatórios e só seus hashes são armazenados. O cookie é HttpOnly e SameSite Strict, com validade de sete dias. Há limite de tentativas persistente. O banco fica em `.runtime/accounts.sqlite`; materiais, perfis, progresso e lixeira de cada conta ficam em `.runtime/accounts/<id>/`. As rotas de arquivos, revisões, leitura e histórico verificam a conta atual. **Copiar meus materiais locais para a conta** importa explicitamente uma cópia e preserva os originais sem conta.
-
-**Não há sincronização pela internet nesta versão local.** Não basta copiar o site ou criar a mesma conta em outra instalação. Para acessar o mesmo acervo entre dispositivos, será necessário hospedar um serviço compartilhado com HTTPS, armazenamento persistente, sessões e espaço de visitante por pessoa, recuperação de senha e confirmação de e-mail. O servidor atual permanece restrito a `127.0.0.1`; não o exponha publicamente como substituto desse serviço. Não há envio de e-mail, verificação de endereço ou recuperação de senha local.
-
-## Validação desta atualização
-
-60 testes Python: 59 aprovados e 1 dependente da instalação real de OCR pulado. 8 testes JavaScript: todos aprovados. Auditoria: 19 casos, sem falhas nos critérios declarados; 16 verificações confirmadas, 1 de sentido da descrição encaminhada ao professor e 2 de OCR com ativação pendente. A interface foi verificada em desktop e 390 × 844: cadastro, login correto/incorreto, saída, perfil salvo, filtros nas marcações, conferência pessoal, retomada na terceira página e animações pausadas. Os testes de conta usaram dados fictícios em um servidor isolado, sem alterar o histórico do usuário.
+As fontes Fredoka e Nunito e os módulos Three.js ficam em `static/assets`. As licenças SIL Open Font License e MIT correspondentes acompanham esses arquivos. A interface utiliza os recursos locais, sem CDN.

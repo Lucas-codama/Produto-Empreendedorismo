@@ -268,8 +268,5 @@ $('dialog-body').addEventListener('click',async event=>{
   if(button.id==='account-logout'){
     button.disabled=true;try{await flushProgress();await api('/api/account/logout',{});$('dialog').close();await accountChanged();announce('Você saiu da conta.');}catch(error){$('auth-feedback').textContent=error.message;button.disabled=false;}
   }
-  if(button.id==='account-import'){
-    button.disabled=true;try{const result=await api('/api/account/import-local',{});await reloadWorkspace();recent();$('auth-feedback').textContent=result.copied+' materiais copiados. Os originais continuam no espaço sem conta.';}catch(error){$('auth-feedback').textContent=error.message;}finally{button.disabled=false;}
-  }
 });
 

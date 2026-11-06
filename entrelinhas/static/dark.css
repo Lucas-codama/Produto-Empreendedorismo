@@ -61,7 +61,7 @@ html{scrollbar-gutter:stable}
 [data-theme=dark] .issue-category{color:#ffbe9e}
 [data-theme=dark] .issue-category.review{color:#d9baff}
 [data-theme=dark] .issue-detail .issue-guidance,[data-theme=dark] .issue-detail label{color:#d0bfdc}
-[data-theme=dark] .issue-detail .evidence,[data-theme=dark] .assist-option,[data-theme=dark] .coverage-check{background:#35283f;color:#e8ddee}
+[data-theme=dark] .issue-detail .evidence,[data-theme=dark] .assist-option{background:#35283f;color:#e8ddee}
 [data-theme=dark] .issue-more{border-color:#594468;color:#d9baff}
 [data-theme=dark] .issue-detail textarea,[data-theme=dark] .issue-detail input{background:#211b29;color:#f0eaf7;border-color:#75617f}
 [data-theme=dark] .issue-detail .review-button{color:#c8aedb}
