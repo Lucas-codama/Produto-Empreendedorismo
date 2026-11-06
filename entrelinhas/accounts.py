@@ -66,6 +66,8 @@ class Accounts:
         self.throttle('register:'+address)
         email = self.email(body.get('email'))
         password = self.password(body.get('password'))
+        if 'password_confirmation' in body and body['password_confirmation'] != password:
+            raise MaterialError('As senhas não coincidem.')
         name = body.get('name', '')
         if not isinstance(name, str) or not 1 <= len(name.strip()) <= 60:
             raise MaterialError('Informe seu nome, com até 60 caracteres.')
@@ -80,21 +82,45 @@ class Accounts:
         return user, self.session(user['id'])
 
     def login(self, body, address):
-        email = self.email(body.get('email'))
+        identifier = body.get('identifier', body.get('email'))
+        if not isinstance(identifier, str) or not 1 <= len(identifier.strip()) <= 254:
+            raise MaterialError('Informe seu e-mail ou nome de perfil.')
+        identifier = identifier.strip().casefold()
         self.throttle('login-address:'+address)
-        self.throttle('login:'+hashlib.sha256(email.encode()).hexdigest())
+        attempt_key = 'login:'+hashlib.sha256(identifier.encode()).hexdigest()
+        self.throttle(attempt_key)
         password = body.get('password')
         if not isinstance(password, str) or len(password) > 128:
-            raise MaterialError('E-mail ou senha incorretos.')
+            raise MaterialError('E-mail, nome de perfil ou senha incorretos.')
         with self.connect() as db:
-            row = db.execute('SELECT * FROM users WHERE email=?', (email,)).fetchone()
+            row = db.execute('SELECT * FROM users WHERE email=?', (identifier,)).fetchone()
+            if row is None:
+                db.create_function('casefold', 1, str.casefold)
+                matches = db.execute('SELECT * FROM users WHERE casefold(name)=? LIMIT 2', (identifier,)).fetchall()
+                if len(matches) > 1:
+                    raise MaterialError('Há mais de uma conta com esse nome. Entre usando seu e-mail.')
+                row = matches[0] if matches else None
         candidate = self.digest(password, row['salt'] if row else '00'*16)
         if not row or not hmac.compare_digest(candidate, row['password_hash']):
-            raise MaterialError('E-mail ou senha incorretos.')
+            raise MaterialError('E-mail, nome de perfil ou senha incorretos.')
         with self.connect() as db:
-            db.execute('DELETE FROM attempts WHERE key=?', ('login:'+hashlib.sha256(email.encode()).hexdigest(),))
+            db.execute('DELETE FROM attempts WHERE key=?', (attempt_key,))
         user = {key: row[key] for key in ('id', 'name', 'email')}
         return user, self.session(user['id'])
+
+    def update_profile(self, user_id, body):
+        name = body.get('name')
+        if not isinstance(name, str) or not 1 <= len(name.strip()) <= 60:
+            raise MaterialError('Informe seu nome, com até 60 caracteres.')
+        email = self.email(body.get('email'))
+        try:
+            with self.connect() as db:
+                changed = db.execute('UPDATE users SET name=?,email=? WHERE id=?', (name.strip(), email, user_id))
+                if changed.rowcount != 1:
+                    raise MaterialError('Conta não encontrada.')
+        except sqlite3.IntegrityError:
+            raise MaterialError('Este e-mail já está sendo usado por outra conta.')
+        return {'id': user_id, 'name': name.strip(), 'email': email}
 
     def session(self, user_id):
         token = secrets.token_urlsafe(32)

@@ -184,12 +184,14 @@ async function showJobContent(next, focus=true) {
   if(typeof flushProgress==='function')await flushProgress();
   job=next; original=job.root_id === job.id ? job : await api('/api/job/'+job.root_id);
   let saved;
-  try{const state=await api('/api/workspace');saved=state.progress[job.id];}catch(_){}
-  if(!saved){try{saved=JSON.parse(localStorage.getItem('entrelinhas-progress-'+storageScope+'-'+job.id) || 'null');}catch(_){}}
-  if(!saved && storageScope==='guest'){let old=[];try{old=JSON.parse(localStorage.getItem('entrelinhas-reviewed-'+job.id) || '[]');}catch(_){}saved={reviewed:old};}
+  if(!job.is_example){
+    try{const state=await api('/api/workspace');saved=state.progress[job.id];}catch(_){}
+    if(!saved){try{saved=JSON.parse(localStorage.getItem('entrelinhas-progress-'+storageScope+'-'+job.id) || 'null');}catch(_){}}
+    if(!saved && storageScope==='guest'){let old=[];try{old=JSON.parse(localStorage.getItem('entrelinhas-reviewed-'+job.id) || '[]');}catch(_){}saved={reviewed:old};}
+  }
   const restored=ReviewRules.restore(job.analysis,saved);
   selected=restored.selected;currentPage=restored.page;mode=restored.mode;reviewed=restored.reviewed;reviewFilters=restored.filters;
-  localStorage.setItem('entrelinhas-last',job.id);
+  if(!job.is_example)localStorage.setItem('entrelinhas-last',job.id);
   $('upload-view').hidden=true; $('history-view').hidden=true; $('result-view').hidden=false; nav('analyze');
   const a=job.analysis;
   $('result-title').textContent=job.filename;
@@ -522,7 +524,7 @@ $('review-panel').addEventListener('click',e=>{
   if(b.dataset.issue!==undefined){selectIssue(Number(b.dataset.issue));animateReview();$('issue-select')?.focus({preventScroll:true});}
   if(b.dataset.step){const target=adjacentIssue(Number(b.dataset.step));if(target>=0){selectIssue(target,true);animateReview();}}
   if(b.dataset.correct!==undefined){correction(Number(b.dataset.correct));}
-  if(b.dataset.review!==undefined){const i=job.analysis.issues[Number(b.dataset.review)];reviewed.has(i.id)?reviewed.delete(i.id):reviewed.add(i.id);localStorage.setItem('entrelinhas-reviewed-'+job.id,JSON.stringify([...reviewed]));render();(document.querySelector(`[data-review="${selected}"]`) || $('filter-status')).focus({preventScroll:true});announce(reviewed.has(i.id)?'Item marcado como conferido por você.':'Conferência desmarcada.');}
+  if(b.dataset.review!==undefined){const i=job.analysis.issues[Number(b.dataset.review)];reviewed.has(i.id)?reviewed.delete(i.id):reviewed.add(i.id);if(!job.is_example)localStorage.setItem('entrelinhas-reviewed-'+job.id,JSON.stringify([...reviewed]));render();(document.querySelector(`[data-review="${selected}"]`) || $('filter-status')).focus({preventScroll:true});announce(reviewed.has(i.id)?'Item marcado como conferido por você.':'Conferência desmarcada.');}
   if(b.dataset.zoom){dialog(job.analysis.pages[currentPage].label,`<p class="muted">Prévia ampliada da versão ${job.version}. ${esc(job.analysis.info.preview)}</p>${pageHTML(job,currentPage,'marked',true)}`);}
 });
 $('assist-button').addEventListener('click',()=>{

@@ -8,6 +8,16 @@ from analyzer import MaterialError
 
 LOCK = threading.RLock()
 
+def is_example(job):
+    if 'is_example' in job:
+        return job['is_example'] is True
+    # Recognize examples saved before this flag existed, without deleting files.
+    return job.get('filename') == 'Atividade_Geografia.pptx' and job.get('analysis', {}).get('context') == {
+        'discipline': 'Geografia', 'activity': 'Atividade de sala',
+        'needs': 'Leitura ampliada; preferência informada de fonte de pelo menos 20 pt; acesso ao gráfico por descrição.',
+        'technology': 'Ampliação de tela e leitor de tela', 'min_font': 20,
+    }
+
 def read(folder):
     path = Path(folder)/'workspace.json'
     with LOCK:
@@ -74,6 +84,8 @@ def save_progress(folder, job, body):
     if not isinstance(scroll,(int,float)) or not math.isfinite(scroll) or not 0 <= scroll <= 100000:
         scroll = 0
     progress = {'page':page,'issue_id':selected,'mode':'step' if body.get('mode')=='step' else 'side', 'reviewed':list(dict.fromkeys(reviewed)), 'filters':{'category':filters.get('category','all'),'status':filters.get('status','all')},'scroll':scroll}
+    if is_example(job):
+        return progress
     with LOCK:
         state = read(folder)
         state['progress'][job['id']] = progress

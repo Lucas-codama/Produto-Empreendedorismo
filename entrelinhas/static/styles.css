@@ -241,8 +241,9 @@ dialog{border-radius:28px;padding:30px;background:#fffaf6}.dialog-heading h2{fon
 }
 @media(min-width:601px) and (max-width:1100px){body:has(#upload-view:not([hidden]) #start-panel:not([hidden])){--home-header:90px}}
 .page-controls{padding-top:10px;margin-bottom:6px}
-.back-button{display:inline-flex;align-items:center;gap:9px;border:0;background:transparent;color:var(--muted);font:800 12px Nunito;padding:8px 2px;cursor:pointer}
-.back-button span{display:grid;place-items:center;width:29px;height:29px;border:1px solid #d7cce0;border-radius:50%;font-size:17px;background:#fffaf5;transition:transform .3s}
+.back-button{display:inline-flex;align-items:center;gap:14px;border:0;background:transparent;color:var(--muted);font:800 12px Nunito;padding:8px 2px;cursor:pointer}
+.back-button span{display:grid;place-items:center;flex-shrink:0;width:29px;height:29px;border:1px solid #d7cce0;border-radius:50%;background:#fffaf5;transition:transform .3s}
+.back-button svg{display:block;width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .back-button:hover{color:var(--teal)}.back-button:hover span{transform:translateX(-3px)}
 .review-tools{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 .paper-board::before{display:none}

@@ -82,6 +82,7 @@ def load_job(identity):
                     job['comparison']=compare(previous,job['analysis'])
                 temporary=target.with_suffix('.new')
                 temporary.write_text(json.dumps(job,ensure_ascii=False),encoding='utf-8');temporary.replace(target)
+            job['is_example'] = workspace_store.is_example(job)
             return job
     except FileNotFoundError:
         raise MaterialError('Essa análise não está mais disponível neste computador.')
@@ -102,12 +103,12 @@ def compare(previous, current):
             'note': 'Itens que não reapareceram precisam ser conferidos. A comparação usa regra e localização; mudanças na estrutura do arquivo podem deslocar os elementos.'}
 
 
-def create_job(content, filename, context, previous=None, edits=None):
+def create_job(content, filename, context, previous=None, edits=None, is_example=False):
     with JOB_LOCK:
-        return _create_job(content,filename,context,previous,edits)
+        return _create_job(content,filename,context,previous,edits,is_example)
 
 
-def _create_job(content, filename, context, previous=None, edits=None):
+def _create_job(content, filename, context, previous=None, edits=None, is_example=False):
     identity = uuid.uuid4().hex
     folder = job_path(identity)
     folder.mkdir(parents=True)
@@ -120,7 +121,8 @@ def _create_job(content, filename, context, previous=None, edits=None):
                'parent_id': previous['id'] if previous else None, 'filename': Path(filename).name[:180],
                'extension': extension, 'version': previous['version'] + 1 if previous else 1,
                'created_at': datetime.now(timezone.utc).isoformat(), 'analysis': result,
-               'comparison': compare(previous, result), 'edits': edits or []}
+               'comparison': compare(previous, result), 'edits': edits or [],
+               'is_example': workspace_store.is_example(previous) if previous else is_example}
         (folder / 'analysis.json').write_text(json.dumps(job, ensure_ascii=False), encoding='utf-8')
         return job
     except Exception:
@@ -213,9 +215,21 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send({'user':self.user, 'scope':self.user['id'] if self.user else 'guest','storage':'local-server','online_sync':False})
             if path == '/api/workspace':
                 state = workspace_store.read(workspace_path())
+                def available_personal(identity):
+                    target = job_path(identity)/'analysis.json'
+                    if not target.exists():
+                        return None
+                    record = json.loads(target.read_text(encoding='utf-8'))
+                    return None if workspace_store.is_example(record) else record
+                state['progress'] = {identity:progress for identity,progress in state['progress'].items()
+                                     if available_personal(identity)}
                 last = state.get('last_job_id')
-                if last and (job_path(last)/'analysis.json').exists():
-                    j = json.loads((job_path(last)/'analysis.json').read_text(encoding='utf-8'))
+                j = available_personal(last) if last else None
+                if last and j is None and (job_path(last)/'analysis.json').exists():
+                    last = next((identity for identity in reversed(state['progress'])), None)
+                    j = available_personal(last) if last else None
+                state['last_job_id'] = last if j else None
+                if j:
                     state['resume'] = {'id':last,'filename':j['filename'],'version':j['version']}
                 else:
                     state['resume'] = None
@@ -225,6 +239,8 @@ class Handler(BaseHTTPRequestHandler):
                 with JOB_LOCK:
                     for file in data_path().glob('*/analysis.json'):
                         j = json.loads(file.read_text(encoding='utf-8'))
+                        if workspace_store.is_example(j):
+                            continue
                         records.append({k: j[k] for k in ['id', 'filename', 'version', 'created_at', 'root_id']})
                 return self.send(sorted(records, key=lambda j: j['created_at'], reverse=True)[:20])
             match = re.fullmatch(r'/api/job/([0-9a-f]{32})(?:/(file|original|report|reading|page/\d+))?', path)
@@ -284,6 +300,11 @@ class Handler(BaseHTTPRequestHandler):
                 database = identity_store()
                 user, token = database.register(body,self.client_address[0]) if path.endswith('/register') else database.login(body,self.client_address[0])
                 return self.send({'user':user,'scope':user['id']},headers={'Set-Cookie':database.cookie(token)})
+            if path == '/api/account/update':
+                if not self.user:
+                    return self.send({'error':'Entre na conta para editar seu perfil.'}, 401)
+                user = identity_store().update_profile(self.user['id'], body)
+                return self.send({'user':user,'scope':user['id']})
             if path == '/api/account/logout':
                 database=identity_store();database.logout(self.headers.get('Cookie'))
                 return self.send({'user':None,'scope':'guest'},headers={'Set-Cookie':database.cookie('')})
@@ -297,6 +318,8 @@ class Handler(BaseHTTPRequestHandler):
                         if not re.fullmatch('[0-9a-f]{32}',source.name) or not source.is_dir() or source.is_symlink() or not (source/'analysis.json').is_file():
                             continue
                         if any(p.is_symlink() for p in source.rglob('*')):
+                            continue
+                        if workspace_store.is_example(json.loads((source/'analysis.json').read_text(encoding='utf-8'))):
                             continue
                         target=destination/source.name
                         if not target.exists():
@@ -329,7 +352,7 @@ class Handler(BaseHTTPRequestHandler):
                            'technology': 'Ampliação de tela e leitor de tela', 'min_font': 20}
                 with tempfile.TemporaryDirectory(dir=DATA.parent, prefix='demo-') as tmp:
                     file = Path(tmp) / 'Atividade_Geografia.pptx'; demo_pptx(file)
-                    job = create_job(file.read_bytes(), file.name, context)
+                    job = create_job(file.read_bytes(), file.name, context, is_example=True)
                 return self.send(job)
             if path == '/api/analyze':
                 try:

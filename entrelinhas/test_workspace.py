@@ -1,4 +1,5 @@
 import json
+import base64
 from http.cookiejar import CookieJar
 from urllib.request import Request, build_opener, HTTPCookieProcessor
 from urllib.error import HTTPError
@@ -19,11 +20,16 @@ class WorkspaceTests(unittest.TestCase):
     def register(self,client,label):
         return self.api(client,'/api/account/register',dict(name=label,email=label+'@example.test',password='Senha de teste 2026!'))
 
+    def personal_material(self,client):
+        demo=self.api(client,'/api/demo',{})
+        content=self.request(client,'/api/job/'+demo['id']+'/file')[0]
+        return self.api(client,'/api/analyze',dict(filename='Meu_material.pptx',file=base64.b64encode(content).decode(),context=demo['analysis']['context']))
+
     def test_accounts_isolate_jobs_profiles_progress_and_history(self):
         guest=self.client();one=self.client();two=self.client()
         self.register(one,'isolation-one');self.register(two,'isolation-two')
         self.assertEqual(self.api(two,'/api/history/clear',{})['count'],0)
-        job=self.api(one,'/api/demo',{})
+        job=self.personal_material(one)
         profile=self.api(one,'/api/profiles/save',dict(name='Ampliação',needs='Fonte ampliada',technology='Zoom',min_font=20))
         issue=job['analysis']['issues'][1]
         saved=self.api(one,'/api/progress',dict(id=job['id'],page=issue['page'] or 0,issue_id=issue['id'],mode='step',reviewed=[issue['id']],filters=dict(category='all',status='reviewed'),scroll=120))
@@ -42,7 +48,7 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_login_cookie_logout_and_new_browser_restore(self):
         first=self.client();self.register(first,'resume-login')
-        job=self.api(first,'/api/demo',{})
+        job=self.personal_material(first)
         self.api(first,'/api/progress',dict(id=job['id'],page=0,issue_id=None,mode='side',reviewed=[],filters=dict(category='images',status='pending')))
         second=self.client()
         _,headers=self.request(second,'/api/account/login',dict(email='RESUME-LOGIN@example.test',password='Senha de teste 2026!'))
@@ -54,7 +60,7 @@ class WorkspaceTests(unittest.TestCase):
         self.assertIsNone(json.loads(self.request(self.client(),'/api/account',headers={'Cookie':cookie})[0])['user'])
 
     def test_import_is_explicit_idempotent_and_preserves_guest(self):
-        guest=self.client();own=self.client();job=self.api(guest,'/api/demo',{})
+        guest=self.client();own=self.client();job=self.personal_material(guest)
         self.register(own,'import-account')
         self.assertEqual(self.api(own,'/api/jobs'),[])
         result=self.api(own,'/api/account/import-local',{})
@@ -84,6 +90,58 @@ class WorkspaceTests(unittest.TestCase):
     def test_foreign_origin_blocked_for_accounts(self):
         with self.assertRaises(HTTPError) as err:self.request(self.client(),'/api/account/login',{},headers={'Origin':'https://other.example'})
         self.assertEqual(err.exception.code,403)
+
+    def test_edit_account_preserves_identity_and_updates_login(self):
+        client=self.client();created=self.register(client,'edit-account')
+        profile=self.api(client,'/api/profiles/save',dict(name='Tomás',needs='Ampliação',technology='Zoom'))
+        updated=self.api(client,'/api/account/update',dict(name='  Novo Nome  ',email='NEW@example.test',id='ignored'))
+        self.assertEqual(updated['user'],dict(id=created['user']['id'],name='Novo Nome',email='new@example.test'))
+        self.assertEqual(self.api(client,'/api/account')['user'],updated['user'])
+        self.assertIn(profile['id'],[p['id'] for p in self.api(client,'/api/workspace')['profiles']])
+        for identifier in ('new@example.test','novo nome'):
+            logged=self.api(self.client(),'/api/account/login',dict(identifier=identifier,password='Senha de teste 2026!'))
+            self.assertEqual(logged['user']['id'],created['user']['id'])
+
+    def test_edit_account_rejects_guest_invalid_data_and_duplicate_email(self):
+        client=self.client();original=self.register(client,'edit-validation')['user']
+        other=self.client();self.register(other,'edit-other')
+        with self.assertRaises(HTTPError) as error:
+            self.api(self.client(),'/api/account/update',dict(name='Guest',email='guest@example.test'))
+        self.assertEqual(error.exception.code,401)
+        for name,email in [('',original['email']),('x'*61,original['email']),('Changed','invalid'),('Changed','edit-other@example.test')]:
+            with self.subTest(name=name,email=email),self.assertRaises(HTTPError):
+                self.api(client,'/api/account/update',dict(name=name,email=email))
+        self.assertEqual(self.api(client,'/api/account')['user'],original)
+
+    def test_example_and_its_revisions_never_enter_history_or_resume(self):
+        client=self.client();self.register(client,'example-only')
+        demo=self.api(client,'/api/demo',{})
+        self.assertTrue(demo['is_example'])
+        self.api(client,'/api/progress',dict(id=demo['id'],page=0))
+        revised=self.api(client,'/api/assist',dict(id=demo['id'],issues=[next(i['id'] for i in demo['analysis']['issues'] if i['action']=='font')]))
+        self.assertTrue(revised['is_example'])
+        self.api(client,'/api/progress',dict(id=revised['id'],page=0))
+        self.assertEqual(self.api(client,'/api/jobs'),[])
+        state=self.api(client,'/api/workspace')
+        self.assertIsNone(state['resume']);self.assertEqual(state['progress'],{})
+
+    def test_example_preserves_personal_resume_and_legacy_examples_are_hidden(self):
+        client=self.client();self.register(client,'example-personal')
+        personal=self.personal_material(client)
+        self.api(client,'/api/progress',dict(id=personal['id'],page=0))
+        demo=self.api(client,'/api/demo',{})
+        self.api(client,'/api/progress',dict(id=demo['id'],page=0))
+        self.assertEqual(self.api(client,'/api/workspace')['resume']['id'],personal['id'])
+        # Simulate the old release, which stored examples as ordinary materials.
+        folder=server.DATA.parent/'accounts'/self.api(client,'/api/account')['user']['id']
+        target=folder/'jobs'/demo['id']/'analysis.json'
+        legacy=json.loads(target.read_text(encoding='utf-8'));legacy.pop('is_example')
+        target.write_text(json.dumps(legacy),encoding='utf-8')
+        state=workspace_store.read(folder);state['progress'][demo['id']]={'page':0};state['last_job_id']=demo['id'];workspace_store.write(folder,state)
+        self.assertEqual([j['id'] for j in self.api(client,'/api/jobs')],[personal['id']])
+        state=self.api(client,'/api/workspace')
+        self.assertEqual(state['resume']['id'],personal['id']);self.assertNotIn(demo['id'],state['progress'])
+        self.assertTrue(self.api(client,'/api/job/'+demo['id'])['is_example'])
 
 class AccountSecurityTests(unittest.TestCase):
     def setUp(self):
@@ -117,5 +175,32 @@ class AccountSecurityTests(unittest.TestCase):
             with self.assertRaises(server.MaterialError) as err:self.db.login(dict(email=email,password='wrong'),'login')
             errors.append(str(err.exception))
         self.assertEqual(errors[0],errors[1]);self.assertIsNone(self.db.user('bad-cookie'))
+
+    def test_login_accepts_email_or_profile_name(self):
+        body=dict(name='João Silva',email='joao@example.test',password='Senha1234')
+        user,_=self.db.register(body,'register-name')
+        for identifier in ('JOAO@example.test','  JOÃO SILVA  '):
+            logged,_=self.db.login(dict(identifier=identifier,password=body['password']),'login-name')
+            self.assertEqual(logged['id'],user['id'])
+        with self.assertRaises(server.MaterialError):
+            self.db.login(dict(identifier='João Silva',password='errada'),'wrong-name')
+
+    def test_duplicate_profile_names_require_email(self):
+        body=dict(name='Mesmo nome',email='first@example.test',password='Senha1234')
+        self.db.register(body,'first')
+        self.db.register({**body,'email':'second@example.test'},'second')
+        with self.assertRaisesRegex(server.MaterialError,'usando seu e-mail'):
+            self.db.login(dict(identifier='MESMO NOME',password=body['password']),'duplicate')
+        logged,_=self.db.login(dict(identifier=body['email'],password=body['password']),'email')
+        self.assertEqual(logged['email'],body['email'])
+
+    def test_password_confirmation_must_match_when_provided(self):
+        body=dict(name='Confirmação',email='confirm@example.test',password='Senha1234',password_confirmation='Outra1234')
+        with self.assertRaisesRegex(server.MaterialError,'não coincidem'):
+            self.db.register(body,'mismatch')
+        with self.db.connect() as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM users').fetchone()[0],0)
+        user,_=self.db.register({**body,'password_confirmation':body['password']},'match')
+        self.assertEqual(user['email'],body['email'])
 
 if __name__=='__main__':unittest.main(verbosity=2)
