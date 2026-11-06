@@ -394,8 +394,8 @@ def main():
     parser.add_argument('--port', type=int, default=8765)
     args = parser.parse_args()
     DATA.mkdir(parents=True, exist_ok=True)
-    server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
-    print(f'Entrelinhas: http://127.0.0.1:{args.port}', flush=True)
+    server = ThreadingHTTPServer(('0.0.0.0', args.port), Handler)
+    print(f'Entrelinhas: http://0.0.0.0:{args.port}', flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
