@@ -66,7 +66,7 @@
         transition=document.startViewTransition(()=>apply(current()));
         // Release snapshots before releasing the clip animation. Otherwise a
         // cancelled mask can expose the old snapshot for a compositor frame.
-        finishTransition=()=>{apply(current());transition.skipTransition();};
+        finishTransition=()=>{animation?.cancel();apply(current());transition.skipTransition();};
         await transition.ready;
         const frames=Array.from({length:61},(_,index)=>{
           const p=index/60,r=3+(radius-3)*Math.pow(p,.88);

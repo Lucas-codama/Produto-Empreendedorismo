@@ -80,3 +80,8 @@ A tela de conclusão inclui uma prévia ampla da versão final, seleção de pá
 Em **Sua conta → Editar perfil → Alterar senha**, informe a senha atual, a nova senha e sua confirmação. A nova senha precisa de 8 a 128 caracteres. A alteração renova a sessão atual e encerra as sessões anteriores; senhas continuam armazenadas apenas como hashes com salt.
 
 Descrições existentes passam por revisão automática de IA durante a análise e ao salvar uma nova versão, na execução local com chave configurada. Aprovações da mesma imagem e descrição são reutilizadas sem outra chamada ou nova aceitação. Descrições aprovadas ficam resolvidas, inclusive em reenvios; indisponibilidade ou incerteza mantém o ponto para revisão humana. Abrir o histórico só consulta aprovações já registradas.
+
+## Configurações de acessibilidade
+
+O botão de configurações no cabeçalho abre uma janela própria, sem fechar o editor nem descartar rascunhos. Ela oferece animações, som, tamanho da interface de 80% a 150% e alto contraste. As preferências ficam salvas neste navegador. A prévia de animações compara movimento e estado estático ao passar o mouse ou focar a opção; respeita movimento reduzido do sistema. A prévia de som usa o som de sucesso a cada três segundos enquanto a opção estiver sob o mouse, ou pelo botão de escuta. Sair, desligar o som, ocultar a aba ou fechar a janela interrompe a prévia. Escape fecha as configurações e devolve o foco ao botão.
+

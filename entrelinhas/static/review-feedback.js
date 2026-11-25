@@ -1,8 +1,8 @@
 'use strict';
 let reviewAudio=null,stopReviewCelebration=()=>{};
 let reviewSoundEnabled=localStorage.getItem('entrelinhas-success-sound')!=='off';
-function prepareReviewSound(){
-  if(!reviewSoundEnabled || motionPaused || motionPreference.matches)return;
+function prepareReviewSound(preview=false){
+  if(!reviewSoundEnabled || (!preview && (motionPaused || motionPreference.matches)))return;
   try{const Audio=window.AudioContext || window.webkitAudioContext;if(!Audio)return;reviewAudio ||= new Audio();reviewAudio.resume().catch(()=>{});}catch(_){}
 }
 function playReviewSound(){
@@ -43,7 +43,3 @@ function celebrateReview(text='Ajuste salvo!'){
   }
   timer=setTimeout(cleanup,2200);
 }
-const soundButton=document.createElement('button');soundButton.className='text-button review-sound-toggle';soundButton.type='button';
-function updateReviewSound(){soundButton.textContent=reviewSoundEnabled?'Som ligado':'Som desligado';soundButton.setAttribute('aria-label',reviewSoundEnabled?'Desativar som de sucesso':'Ativar som de sucesso');soundButton.setAttribute('aria-pressed',String(reviewSoundEnabled));}
-soundButton.addEventListener('click',()=>{reviewSoundEnabled=!reviewSoundEnabled;localStorage.setItem('entrelinhas-success-sound',reviewSoundEnabled?'on':'off');updateReviewSound();});
-$('motion-button').after(soundButton);updateReviewSound();
