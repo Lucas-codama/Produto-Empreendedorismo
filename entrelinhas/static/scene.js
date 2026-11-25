@@ -6,7 +6,7 @@ const canvas = document.getElementById('document-scene');
 const paused = () => document.body.classList.contains('motion-paused') || document.body.classList.contains('theme-changing');
 try {
   const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.8));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -17,7 +17,7 @@ try {
   scene.add(new THREE.AmbientLight(0xffffff, 2.1));
   const sun = new THREE.DirectionalLight(0xfff5e5, 4.2);
   sun.position.set(-4, 6, 8); sun.castShadow = true;
-  sun.shadow.mapSize.set(1024,1024);
+  sun.shadow.mapSize.set(512,512);
   sun.shadow.camera.left = -6; sun.shadow.camera.right = 6;
   sun.shadow.camera.top = 6; sun.shadow.camera.bottom = -6;
   sun.shadow.normalBias = .04;

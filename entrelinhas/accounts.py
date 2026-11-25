@@ -129,6 +129,31 @@ class Accounts:
             db.execute('INSERT INTO sessions VALUES(?,?,?)', (hashlib.sha256(token.encode()).hexdigest(), user_id, time.time()+SESSION_AGE))
         return token
 
+    def change_password(self,user_id,body,address):
+        self.throttle('password-address:'+address)
+        self.throttle('password-user:'+user_id)
+        current=body.get('current_password')
+        if not isinstance(current,str) or not 1<=len(current)<=128:
+            raise MaterialError('Informe sua senha atual.')
+        password=self.password(body.get('new_password'))
+        if body.get('password_confirmation')!=password:
+            raise MaterialError('A confirmação da nova senha não coincide.')
+        with self.connect() as db:
+            row=db.execute('SELECT salt,password_hash FROM users WHERE id=?',(user_id,)).fetchone()
+        if row is None:raise MaterialError('Conta não encontrada.')
+        if not hmac.compare_digest(self.digest(current,row['salt']),row['password_hash']):
+            raise MaterialError('Senha atual incorreta.')
+        if hmac.compare_digest(current.encode('utf-8'),password.encode('utf-8')):raise MaterialError('Escolha uma nova senha diferente da atual.')
+        salt=secrets.token_hex(16);digest=self.digest(password,salt);token=secrets.token_urlsafe(32)
+        with self.connect() as db:
+            changed=db.execute('UPDATE users SET salt=?,password_hash=? WHERE id=? AND password_hash=?',
+                (salt,digest,user_id,row['password_hash']))
+            if changed.rowcount!=1:raise MaterialError('A senha foi alterada em outra sessão. Entre novamente.')
+            db.execute('DELETE FROM sessions WHERE user_id=?',(user_id,))
+            db.execute('INSERT INTO sessions VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),user_id,time.time()+SESSION_AGE))
+            db.execute('DELETE FROM attempts WHERE key=?',('password-user:'+user_id,))
+        return token
+
     @staticmethod
     def token(cookie):
         parsed = SimpleCookie()

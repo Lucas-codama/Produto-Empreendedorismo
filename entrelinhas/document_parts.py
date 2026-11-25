@@ -61,7 +61,7 @@ def patch(source,destination,ref,action,value,targets,default_background,contras
                     if targets and target is None:continue
                     bg=(target or {}).get('background') or default_background
                     if not bg:raise ValueError('Fundo não determinado para correção.')
-                    color=max(['#000000','#FFFFFF'],key=lambda c:contrast(c,bg))
+                    color=value or max(['#000000','#FFFFFF'],key=lambda c:contrast(c,bg))
                     run.font.color.rgb=RGBColor.from_string(color[1:])
         content=etree.tostring(root,xml_declaration=True,encoding='UTF-8',standalone=True)
         with zipfile.ZipFile(destination,'w',zipfile.ZIP_DEFLATED) as out:

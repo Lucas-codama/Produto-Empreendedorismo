@@ -17,12 +17,16 @@ from pptx.util import Pt
 import pdfplumber
 from pypdf import PdfReader
 import document_parts
+import pdf_edit
+import document_fix
+import access_context
+import pypdfium2 as pdfium
 from vision_checks import PdfPixels, PDF_LOCK, ocr_blocks, ocr
 from pdf_structure import inspect as inspect_pdf_structure
 
 SUPPORTED = {'.pdf', '.docx', '.pptx', '.png', '.jpg', '.jpeg'}
 MAX_BYTES = 20 * 1024 * 1024
-ENGINE_VERSION = 9
+ENGINE_VERSION = 18
 NS = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
       'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'}
 
@@ -252,8 +256,9 @@ def parse_pptx(path):
                 page['blocks'].append(dict(id=block_id,type='text',text=text_frame.text,runs=runs,background=background,source=source,location=location,**box))
             if shape.shape_type==13:
                 alt,decorative=picture_info(shape._element)
+                caption=next((getattr(other,'text','') for other in slide.shapes if other.name=='EntrelinhasCaption'+str(shape.shape_id)),'')
                 recognized,ocr_error=ocr(Image.open(BytesIO(shape.image.blob)))
-                page['blocks'].append(dict(id=identity,type='image',image=data_image(shape.image.blob),alt=alt,decorative=decorative,
+                page['blocks'].append(dict(id=identity,type='image',image=data_image(shape.image.blob),alt=alt,caption=caption,decorative=decorative,
                                           ocr_text=' '.join(w['text'] for w in recognized),ocr_error=ocr_error,source=ref(shape_path),**bounds))
             elif shape.has_text_frame:
                 text_block(shape.text_frame,identity,bounds,ref(shape_path),bg)
@@ -406,6 +411,10 @@ def parse_docx(path):
             drawing_index = drawings.index(drawing)
             image_index += 1
             alt, decorative = picture_info(drawing)
+            properties=drawing.xpath('.//wp:docPr');caption_name='EntrelinhasCaption'+properties[0].get('id','0') if properties else ''
+            sibling=element.getnext();caption=''
+            if sibling is not None and any(n.get('{'+NS['w']+'}name')==caption_name for n in sibling.iter('{'+NS['w']+'}bookmarkStart')):
+                caption=''.join(n.text or '' for n in sibling.iter('{'+NS['w']+'}t'))
             blips = drawing.xpath('.//a:blip')
             if not blips:
                 continue
@@ -416,7 +425,7 @@ def parse_docx(path):
             blob=package.read(target)
             recognized,ocr_error=ocr(Image.open(BytesIO(blob)))
             blocks.append({'id': f'{prefix}img{drawing_index}', 'type': 'image', 'image': data_image(blob),
-                           'alt': alt, 'decorative': decorative, 'location': 'Imagem '+str(drawing_index+1),
+                           'alt': alt, 'caption':caption, 'decorative': decorative, 'location': 'Imagem '+str(drawing_index+1),
                            'ocr_text':' '.join(w['text'] for w in recognized),'ocr_error':ocr_error,
                            'source': {'part':part,'image': drawing_index}})
         if len(blocks) >= 9:
@@ -477,6 +486,16 @@ def parse_pdf(path):
     structure=inspect_pdf_structure(reader)
     with pdfplumber.open(path) as pdf:
         for index, page in enumerate(pdf.pages):
+            for heading in structure['headings']:
+                ids={ref['mcid'] for ref in heading['refs'] if ref['page']==index}
+                chars=[c for c in page.chars if c.get('mcid') in ids and c.get('text','').strip()]
+                if chars:
+                    text=pdfplumber.utils.extract_text(chars) or ''
+                    if text.strip():
+                        heading.setdefault('locations',[]).append({'page':index,'text':text.strip(),
+                            'x':min(c['x0'] for c in chars),'y':min(c['top'] for c in chars),
+                            'w':max(c['x1'] for c in chars)-min(c['x0'] for c in chars),
+                            'h':max(c['bottom'] for c in chars)-min(c['top'] for c in chars)})
             if structure['tagged']:
                 mcids={c.get('mcid') for c in page.chars if c.get('mcid') is not None}
                 missing=[r['mcid'] for r in structure['reading_order'] if r['page']==index and r['mcid'] not in mcids and (index,r['mcid']) not in structure['figures']]
@@ -561,8 +580,19 @@ def parse_pdf(path):
                 recognized,img_error=ocr(crop)
                 buffer=BytesIO();crop.save(buffer,format='PNG')
                 blocks.append({'id': f'pdf{index}-i{img_index}', 'type': 'image' if figure else 'pdf_image', 'alt': figure['alt'] if figure else None,
+                               'caption':figure.get('caption','') if figure else '',
                                'image':data_image(buffer.getvalue()),'ocr_text':' '.join(w['text'] for w in recognized),'ocr_error':img_error,
+                               'source':{'pdf_page':index,**({'pdf_path':figure['path']} if figure else {})},
                                'x': image['x0'], 'y': image['top'], 'w': image['width'], 'h': image['height']})
+            with PDF_LOCK:
+                editable_pdf=pdfium.PdfDocument(str(path))
+                try:
+                    editable_page=editable_pdf[index]
+                    try:
+                        for block in blocks:
+                            if block['type']=='text':block['pdf_color_editable']=pdf_edit.can_edit(editable_page,block)
+                    finally:editable_page.close()
+                finally:editable_pdf.close()
             pages.append({'label': 'Página '+str(index+1), 'kind': 'pdf', 'blocks': blocks,
                           'width': page.width, 'height': page.height, 'background': '#FFFFFF',
                           'has_text': bool(words), 'ocr_error':ocr_error,'ocr_text':' '.join(b['text'] for b in blocks if b.get('ocr')), 'page_index': index})
@@ -614,7 +644,7 @@ def analyze(path, context):
         if info['format'] == 'PPTX' and not page['title']:
             add('slide_title', 'Slide sem título identificado', 'Não foi encontrado um título no campo de título deste slide. Um texto visualmente destacado pode não estar definido como título.',
                 'No PowerPoint, use o espaço reservado de título e preencha um título que identifique o conteúdo.', pi,
-                severity='review')
+                severity='review',action='slide_title')
         if page['kind'] == 'pdf' and not page['has_text']:
             add('image_only', 'Página sem texto extraível', 'Não foi possível extrair texto desta página. Se houver palavras visíveis, elas podem estar em uma imagem ou convertidas em desenho.',
                 'Se houver texto, transcreva ou use OCR e confira a transcrição. Depois organize a ordem de leitura.', pi)
@@ -641,7 +671,8 @@ def analyze(path, context):
                                 f'O trecho tem fonte de {min(sizes):g} pt; você informou {minimum:g} pt para este estudante.',
                                 f'Aumente para pelo menos {minimum:g} pt e confira se o texto cabe sem cortes ou sobreposições.', pi, block,
                                 evidence=f'Menor fonte identificada: {min(sizes):g} pt. Preferência: {minimum:g} pt.',
-                                action='font' if info['editable'] else None)
+                                action='font' if info['editable'] or block.get('pdf_color_editable') else None)
+                            if block.get('pdf_color_editable'):issues[-1]['pdf_box']=[block['x'],block['y'],block['x']+block['w'],block['y']+block['h']]
                 bad = []
                 contrast_runs=[]
                 for run in runs:
@@ -659,14 +690,18 @@ def analyze(path, context):
                 if bad:
                     ratio, required, fg, bg = min(bad)
                     add('contrast', 'Contraste de texto abaixo da referência',
-                        f'O contraste medido neste trecho é {ratio:.2f}:1, abaixo da referência de {required:g}:1 para o tamanho e o peso identificados.',
-                        'Mude a cor do texto ou do fundo para aumentar o contraste. Confira a combinação no arquivo original.', pi, block,
+                        f'A cor do texto está muito próxima da cor do fundo, o que pode dificultar a leitura. A diferença medida foi {ratio:.2f}:1; para este texto, a referência é de pelo menos {required:g}:1. Quanto maior esse número, mais o texto se destaca.',
+                        'Escolha uma cor de texto que se destaque do fundo. Por exemplo: texto preto costuma funcionar melhor sobre amarelo claro do que texto branco. Use o ajuste abaixo, salve e confira a nova análise.', pi, block,
                         evidence=f'{fg} sobre {bg}: {ratio:.2f}:1. Referência: {required:g}:1.',
-                        action='contrast' if info['editable'] else None)
+                        action='contrast' if info['editable'] or block.get('pdf_color_editable') else None)
                     issues[-1]['background']=bg
+                    if block.get('pdf_color_editable'):
+                        issues[-1]['pdf_box']=[block['x'],block['y'],block['x']+block['w'],block['y']+block['h']]
                     issues[-1]['contrast_runs']=contrast_runs
                     if any(r.get('estimated') for r in runs):
-                        issues[-1]['explanation']=f'O contraste estimado pela imagem da página é {ratio:.2f}:1, abaixo da referência de {required:g}:1. Confira as cores no original.'
+                        issues[-1]['explanation']=f'O texto se destaca pouco do fundo e pode ser difícil de ler. Pela imagem da página, estimamos um contraste de {ratio:.2f}:1; a referência para este texto é de pelo menos {required:g}:1. Quanto maior o número, maior a diferença entre texto e fundo. Como a medida é estimada, confira a prévia depois de salvar.'
+                    if not issues[-1]['action']:
+                        issues[-1]['suggestion']='O texto está incorporado em uma imagem ou não pôde ser isolado para edição segura neste PDF. Para corrigir o arquivo, altere a cor no documento de origem e envie a nova versão em “Testar nova versão”.'
                         issues[-1]['evidence']+=' Medição da imagem renderizada; contraste estimado, confira o resultado.'
             elif block['type'] == 'image':
                 measured['images'] += 1
@@ -675,17 +710,17 @@ def analyze(path, context):
                         add('alt_missing', 'Imagem sem descrição alternativa',
                             'Esta imagem não tem descrição alternativa associada. O leitor de tela pode não comunicar a informação que ela apresenta.',
                             'Descreva a informação necessária para a atividade. Se a imagem apenas enfeita a página, marque-a como decorativa no arquivo de origem.',
-                            pi, block, action='alt' if info['editable'] else None, evidence='Descrição alternativa ausente nos metadados.')
+                            pi, block, action='alt' if info['editable'] or (block.get('source') or {}).get('pdf_path') else None, evidence='Descrição alternativa ausente nos metadados.')
                     elif re.fullmatch(r'(?:image|picture|imagem|foto)[\s_\d-]*(?:\.(?:png|jpe?g|gif|bmp))?', block['alt'], re.I):
                         add('alt_placeholder', 'Descrição de imagem genérica',
                             'A descrição encontrada é um nome genérico, como um nome de arquivo. Ela não informa o que a imagem mostra.',
                             'Substitua esse nome pela informação da imagem que o estudante precisa para realizar a atividade.',
-                            pi, block, action='alt' if info['editable'] else None, evidence=block['alt'])
+                            pi, block, action='alt' if info['editable'] or (block.get('source') or {}).get('pdf_path') else None, evidence=block['alt'])
                     else:
                         add('alt_quality', 'Conferir o sentido da descrição',
                             'A imagem tem descrição. O site não verificou se esse texto corresponde ao que ela mostra.',
                             'Compare a descrição encontrada com a imagem: ela identifica o conteúdo e inclui a informação pedida no enunciado? Corrija o que estiver errado ou faltando.',
-                            pi, block, severity='review', evidence=block['alt'], action='alt' if info['editable'] else None)
+                            pi, block, severity='review', evidence=block['alt'], action='alt' if info['editable'] or (block.get('source') or {}).get('pdf_path') else None)
                     issues[-1]['image']=block.get('image')
                     issues[-1]['image_text']=block.get('ocr_text','')
                     if block.get('ocr_text'):
@@ -725,8 +760,30 @@ def analyze(path, context):
             'pdf_structure_limit':('A estrutura excedeu o limite de inspeção. Parte dela ficou sem verificação.','Divida o documento para análise ou confira a estrutura completa em um editor de tags de PDF.'),
         }
         for finding in info.get('structure_findings',[]):
+            # The image card already covers this figure's description and caption.
+            if finding['rule']=='pdf_figure_alt' and any((b.get('source') or {}).get('pdf_path')==finding.get('path') for p in pages for b in p['blocks']):
+                continue
             explanation,suggestion=structure_guidance.get(finding['rule'],('A inspeção identificou a ocorrência descrita abaixo na estrutura do PDF.','Confira o elemento indicado em um editor de tags de PDF.'))
-            add(finding['rule'],finding['title'],explanation,suggestion,finding.get('page'),evidence=finding['evidence'])
+            action={'pdf_figure_alt':'alt','pdf_heading_skip':'heading','pdf_table_headers':'table_headers','pdf_language_missing':'language'}.get(finding['rule'])
+            target=None;page_index=finding.get('page')
+            if finding['rule']=='pdf_heading_skip':
+                locations=finding['heading'].get('locations',[])
+                if locations:
+                    position=locations[0];page_index=position['page']
+                    target={'id':'heading:'+':'.join(map(str,finding['path'])),'type':'structure_target',
+                        **{k:position[k] for k in ('text','x','y','w','h')}}
+                    pages[page_index]['blocks'].append(target)
+            add(finding['rule'],finding['title'],explanation,suggestion,page_index,block=target,evidence=finding['evidence'],action=action)
+            if finding['rule']=='pdf_heading_skip':
+                heading=finding['heading'];previous=finding.get('previous_heading')
+                def heading_text(item):
+                    return ' '.join(loc['text'] for loc in item.get('locations',[])) or item.get('text','') if item else ''
+                issues[-1]['heading_context']={'text':heading_text(heading)[:500],'level':heading['level'],
+                    'previous_text':heading_text(previous)[:500],'previous_level':previous['level'] if previous else None,
+                    'suggested_level':finding['suggested_level'],'located':bool(target)}
+            if finding.get('path'):
+                issues[-1]['source']={'pdf_path':finding['path']}
+                issues[-1]['id']+=':'+':'.join(map(str,finding['path']))
         if not info.get('tagged'):
             add('pdf_structure', 'PDF sem estrutura de tags identificada',
                 'O PDF não tem uma árvore de tags identificada para organizar títulos, parágrafos, tabelas e imagens.',
@@ -737,20 +794,41 @@ def analyze(path, context):
                 'Percorra o documento com um leitor de tela: títulos, parágrafos e etapas devem aparecer na ordem correta, sem saltos ou repetições.', None, severity='review')
     if info.get('has_tables'):
         add('table_review', 'Conferir a estrutura das tabelas', 'O documento contém tabelas. A inspeção não confirmou a associação entre cada célula e seus cabeçalhos.',
-            'No arquivo de origem, defina a linha de cabeçalho. Com um leitor de tela, confira se cada célula é anunciada com o cabeçalho correspondente.', None, severity='review')
+            'Marque a primeira linha como cabeçalho pelo formulário abaixo. Depois confira se cada célula é anunciada com o cabeçalho correspondente.', None, severity='review',action='table_headers')
     issues.sort(key=lambda i: (i['severity'] == 'review', i['page'] if i['page'] is not None else -1, i['id']))
     for index, issue in enumerate(issues):
         issue['number'] = index + 1
+        if issue['action']=='alt':
+            issue['suggestion']='Escreva no campo abaixo o que o estudante precisa saber sobre a imagem para realizar a atividade. Depois clique em “Salvar e verificar”.'
+        elif issue['action']=='language':
+            issue['suggestion']='Informe o código do idioma no formulário abaixo, como pt-BR para português do Brasil, e salve. Isso ajuda o leitor de tela a pronunciar o conteúdo corretamente.'
+        elif issue['action']=='heading':
+            issue['suggestion']='Escolha abaixo o nível do título nesta seção. Use Título 1 para a seção principal e níveis seguintes para suas subdivisões, sem saltos.'
+        elif issue['action']=='table_headers':
+            issue['suggestion']='Use o botão abaixo para identificar a primeira linha como cabeçalho. Confira se essa linha contém os rótulos das colunas. Para reorganizar a tabela, use o editor original.'
+        elif not issue['action']:
+            issue['suggestion']='Este ponto exige revisão no editor original. Depois, envie o arquivo em “Testar nova versão”.'
     for issue in issues:
         if issue['rule']=='contrast_unknown':
             issue['explanation']='Não foi possível medir com confiança o contraste de alguns trechos desta página. Eles continuam sem resultado de contraste.'
+    access=access_context.detect(context)
+    for issue in issues:
+        access_context.explain(issue,access)
+        if issue['page'] is not None:
+            image=next((b for b in pages[issue['page']]['blocks'] if b['id']==issue['block_id'] and b.get('image')),None)
+            if image and image['type'] in {'image','pdf_image'}:
+                issue['image']=image['image']
+                issue['quick_image']=info['format'] in {'DOCX','PPTX','PDF'}
+                if issue['rule'] in {'alt_missing','alt_placeholder','image_review','pdf_figure_alt'}:
+                    issue['title']='Descrição e legenda da imagem'
+                elif issue['rule']=='alt_quality':issue['title']='Conferir descrição e legenda da imagem'
     checks = [
         {'name': 'Contraste de texto', 'detail': f"{measured['contrast']} trechos medidos, sendo {measured['estimated_contrast']} por imagem renderizada; {measured['unknown_contrast']} sem cálculo confiável.", 'state': 'partial' if measured['estimated_contrast'] or measured['unknown_contrast'] or not measured['contrast'] else 'checked'},
         {'name': 'Tamanho da fonte', 'detail': f"Preferência: {minimum:g} pt. {measured['font']} blocos medidos." if minimum else 'Informe uma preferência do estudante para comparar os tamanhos.', 'state': 'partial' if not minimum or measured['unknown_font'] or not measured['font'] else 'checked'},
         {'name': 'Descrições de imagens', 'detail': f"{measured['images']} elementos de imagem identificados. O significado exige revisão humana.", 'state': 'partial'},
         {'name': 'Estrutura e significado', 'detail': 'A ordem de leitura, o sentido dos gráficos e a preservação da atividade precisam ser conferidos.', 'state': 'review'},
     ]
-    return {'engine_version':ENGINE_VERSION,'pages': pages, 'info': info, 'issues': issues, 'checks': checks, 'context': context,
+    return {'engine_version':ENGINE_VERSION,'pages': pages, 'info': info, 'issues': issues, 'checks': checks, 'context': context,'access_context':access,
             'counts': {'attention': sum(i['severity'] == 'attention' for i in issues),
                        'review': sum(i['severity'] == 'review' for i in issues), 'pages': len(pages)},
             'measured': measured}
@@ -759,7 +837,7 @@ def analyze(path, context):
 def apply_edit(source, destination, issue, value=None):
     action = issue.get('action')
     ref = issue.get('source') or {}
-    if action not in {'font', 'contrast', 'alt'}:
+    if action not in {'font', 'contrast', 'alt','language','heading','table_headers','slide_title'}:
         raise MaterialError('Esse item precisa ser corrigido no programa original e reenviado.')
     if action == 'font':
         value = float(value)
@@ -769,7 +847,22 @@ def apply_edit(source, destination, issue, value=None):
         value = str(value or '').strip()
         if not value or len(value) > 3000:
             raise MaterialError('Escreva uma descrição com até 3.000 caracteres.')
-    if source.suffix.lower() == '.pptx':
+    elif action=='contrast' and value is not None:
+        if not isinstance(value,str) or not re.fullmatch(r'#[0-9a-fA-F]{6}',value):
+            raise MaterialError('Escolha uma cor válida para o texto.')
+    if source.suffix.lower()=='.docx' and action=='table_headers':
+        document_fix.table_headers(source,destination)
+    elif source.suffix.lower()=='.pptx' and action=='slide_title':
+        document_fix.slide_title(source,destination,issue['page'],value)
+    elif source.suffix.lower()=='.pdf' and action=='contrast':
+        background=issue.get('background') or '#FFFFFF'
+        color=value or max(['#000000','#FFFFFF'],key=lambda c:contrast(c,background))
+        pdf_edit.recolor(source,destination,issue,color)
+    elif source.suffix.lower()=='.pdf' and action=='font':
+        pdf_edit.resize(source,destination,issue,value)
+    elif source.suffix.lower()=='.pdf':
+        pdf_edit.structure_edit(source,destination,issue,value)
+    elif source.suffix.lower() == '.pptx':
         from pptx.dml.color import RGBColor
         prs = Presentation(source)
         shape = prs.slides[ref['slide']].shapes[ref['shape']]
@@ -788,7 +881,7 @@ def apply_edit(source, destination, issue, value=None):
                         target=next((t for t in targets if t['source'].get('paragraph')==p_index and t['source'].get('run')==r_index),None) if targets else None
                         if targets and target is None: continue
                         background = (target or {}).get('background') or issue.get('background') or '#FFFFFF'
-                        color = max(['#000000', '#FFFFFF'], key=lambda c: contrast(c, background))
+                        color = value or max(['#000000', '#FFFFFF'], key=lambda c: contrast(c, background))
                         run.font.color.rgb = RGBColor.from_string(color[1:])
         prs.save(destination)
     elif source.suffix.lower() == '.docx':

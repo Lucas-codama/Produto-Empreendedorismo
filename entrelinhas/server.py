@@ -12,6 +12,8 @@ from io import BytesIO
 import json
 import mimetypes
 import os
+import ipaddress
+import time
 from pathlib import Path
 import re
 import shutil
@@ -22,13 +24,17 @@ from urllib.parse import unquote, urlparse, quote
 
 from analyzer import MaterialError, MAX_BYTES, ENGINE_VERSION, analyze, apply_edit, decorate_actions, demo_pptx
 import pypdfium2 as pdfium
-import reading
 import history_store
 import accounts
+import image_quick_edit
 import workspace_store
+import image_ai
+import review_store
+from dotenv import load_dotenv
 from vision_checks import PDF_LOCK
 
 ROOT = Path(__file__).resolve().parent
+load_dotenv(ROOT/'.env',override=False)
 STATIC = ROOT / 'static'
 DATA = ROOT / '.runtime' / 'jobs'
 RENDER_LOCK = PDF_LOCK
@@ -75,7 +81,8 @@ def load_job(identity):
         with JOB_LOCK:
             target=job_path(identity)/'analysis.json'
             job=json.loads(target.read_text(encoding='utf-8'))
-            if job['analysis'].get('engine_version')!=ENGINE_VERSION:
+            archived=review_store.summary(workspace_path(),identity)
+            if job['analysis'].get('engine_version')!=ENGINE_VERSION and not (archived and archived['status']=='completed'):
                 job['analysis']=decorate_actions(analyze(file_path(job),dict(job['analysis']['context'])))
                 job.pop('ai_review',None)
                 if job.get('parent_id'):
@@ -84,6 +91,17 @@ def load_job(identity):
                 temporary=target.with_suffix('.new')
                 temporary.write_text(json.dumps(job,ensure_ascii=False),encoding='utf-8');temporary.replace(target)
             job['is_example'] = workspace_store.is_example(job)
+            automatic=review_image_descriptions(job)
+            job['ai_checks']=image_ai.usage_status(job_path(job['id'])/'ai_checks.json',workspace_path())
+            if job.get('parent_id') and not review_store.summary(workspace_path(),job['parent_id']) and (job_path(job['parent_id'])/'analysis.json').exists():load_job(job['parent_id'])
+            saved=workspace_store.read(workspace_path()).get('progress',{}).get(identity,{})
+            if automatic and not (archived and archived['status']=='completed'):
+                state=workspace_store.read(workspace_path())
+                if identity in state['progress']:
+                    state['progress'][identity]['resolved']=sorted(set(saved.get('resolved',[])) | automatic)
+                    workspace_store.write(workspace_path(),state);saved=state['progress'][identity]
+                temporary=target.with_suffix('.new');temporary.write_text(json.dumps(job,ensure_ascii=False),encoding='utf-8');temporary.replace(target)
+            job['review']=review_store.sync(workspace_path(),job,set(saved.get('resolved',job.get('resolved_issues',[]))) | automatic)
             return job
     except FileNotFoundError:
         raise MaterialError('Essa análise não está mais disponível neste computador.')
@@ -91,6 +109,48 @@ def load_job(identity):
 
 def file_path(job):
     return job_path(job['id']) / ('material' + job['extension'])
+
+
+def review_image_descriptions(job,allow_network=False):
+    """Resolve descriptions confirmed by vision; leave uncertainty for human review."""
+    confirmed=set();started=time.monotonic()
+    for issue in job['analysis']['issues']:
+        if issue['rule']!='alt_quality' or issue.get('page') is None:continue
+        block=next((b for b in job['analysis']['pages'][issue['page']]['blocks'] if b['id']==issue['block_id']),None)
+        if not block or not block.get('image') or not block.get('alt') or image_ai.is_placeholder(block['alt']):continue
+        state=review_store.ai_status(workspace_path(),image_ai.approval_key(block['image'],block['alt']))
+        result=state.get('result')
+        approved=bool(result and image_ai.public_result(image_ai.normalize_result(result,block['alt']))['approved'])
+        if not approved and allow_network and os.environ.get('OPENROUTER_API_KEY','').strip() and not os.environ.get('RENDER') and time.monotonic()-started<45:
+            try:
+                result=image_ai.verify(block['image'],block['alt'],str(workspace_path()),job_path(job['id'])/'ai_checks.json',block['id'],workspace_path())
+                approved=result['approved']
+            except image_ai.ImageAIError:pass
+        if approved:confirmed.add(issue['id'])
+    job['ai_confirmed_issues']=sorted(confirmed)
+    job['resolved_issues']=sorted(set(job.get('resolved_issues',[])) | confirmed)
+    job['edited_issue_ids']=sorted(set(job.get('edited_issue_ids',[])) | confirmed)
+    return confirmed
+
+
+def require_editable(job):
+    if (job.get('review') or {}).get('status')=='completed' or review_store.root_completed(workspace_path(),job['root_id']):
+        raise MaterialError('Esta revisão está concluída. Consulte as alterações e baixe o documento pelo histórico.')
+
+
+@lru_cache(maxsize=16)
+def rendered_page(path,index,modified):
+    with RENDER_LOCK:
+        pdf=pdfium.PdfDocument(path)
+        try:
+            page=pdf[index]
+            try:
+                bitmap=page.render(scale=1.5)
+                try:
+                    output=BytesIO();bitmap.to_pil().save(output,format='PNG');return output.getvalue()
+                finally:bitmap.close()
+            finally:page.close()
+        finally:pdf.close()
 
 
 def compare(previous, current):
@@ -110,6 +170,7 @@ def create_job(content, filename, context, previous=None, edits=None, is_example
 
 
 def _create_job(content, filename, context, previous=None, edits=None, is_example=False):
+    if previous:require_editable(previous)
     identity = uuid.uuid4().hex
     folder = job_path(identity)
     folder.mkdir(parents=True)
@@ -124,7 +185,21 @@ def _create_job(content, filename, context, previous=None, edits=None, is_exampl
                'created_at': datetime.now(timezone.utc).isoformat(), 'analysis': result,
                'comparison': compare(previous, result), 'edits': edits or [],
                'is_example': workspace_store.is_example(previous) if previous else is_example}
+        if previous and edits:
+            saved=workspace_store.read(workspace_path()).get('progress',{}).get(previous['id'],{})
+            prior=saved.get('resolved',previous.get('resolved_issues',[]))
+            existing={i['id'] for i in result['issues']}
+            resolved={identity for identity in prior if identity in existing}
+            for edit in edits:
+                if edit.get('description_saved'):
+                    resolved.difference_update(i['id'] for i in result['issues'] if i['rule']=='alt_quality'
+                        and i['page']==edit.get('page') and i['block_id']==edit.get('block_id'))
+            job['resolved_issues']=sorted(resolved)
+            job['edited_issue_ids']=[]
+        review_image_descriptions(job,allow_network=True)
+        job['ai_checks']=image_ai.usage_status(folder/'ai_checks.json',workspace_path())
         (folder / 'analysis.json').write_text(json.dumps(job, ensure_ascii=False), encoding='utf-8')
+        job['review']=review_store.sync(workspace_path(),job,job.get('resolved_issues',[]))
         return job
     except Exception:
         if not folder.resolve().is_relative_to(data_path().resolve()):
@@ -139,6 +214,7 @@ def edit_job(job, requests):
 
 
 def _edit_job(job, requests):
+    require_editable(job)
     issues = {i['id']: i for i in job['analysis']['issues']}
     if not requests or len(requests) > 100:
         raise MaterialError('Selecione de 1 a 100 ajustes por vez.')
@@ -156,6 +232,8 @@ def _edit_job(job, requests):
             apply_edit(current, destination, issue, value)
             current = destination
             edits.append({'title': issue['title'], 'location': issue['location'], 'action': issue['action'],
+                          'before':issue.get('text') or issue.get('evidence',''),'value':value,
+                          'page':issue['page'],'block_id':issue['block_id'],'description_saved':issue['action']=='alt',
                           'note': 'Conferir o resultado, o espaço disponível e a finalidade da atividade.'})
         return create_job(current.read_bytes(), job['filename'], dict(job['analysis']['context']), job, edits)
 
@@ -223,8 +301,8 @@ class Handler(BaseHTTPRequestHandler):
                     target = job_path(identity)/'analysis.json'
                     if not target.exists():
                         return None
-                    record = json.loads(target.read_text(encoding='utf-8'))
-                    return None if workspace_store.is_example(record) else record
+                    record = load_job(identity)
+                    return None if workspace_store.is_example(record) or review_store.root_completed(workspace_path(),record['root_id']) else record
                 state['progress'] = {identity:progress for identity,progress in state['progress'].items()
                                      if available_personal(identity)}
                 last = state.get('last_job_id')
@@ -242,22 +320,23 @@ class Handler(BaseHTTPRequestHandler):
                 records = []
                 with JOB_LOCK:
                     for file in data_path().glob('*/analysis.json'):
-                        j = json.loads(file.read_text(encoding='utf-8'))
+                        j = load_job(file.parent.name)
                         if workspace_store.is_example(j):
                             continue
-                        records.append({k: j[k] for k in ['id', 'filename', 'version', 'created_at', 'root_id']})
-                return self.send(sorted(records, key=lambda j: j['created_at'], reverse=True)[:20])
-            match = re.fullmatch(r'/api/job/([0-9a-f]{32})(?:/(file|original|report|reading|page/\d+))?', path)
+                        records.append({**{k: j[k] for k in ['id', 'filename', 'version', 'created_at', 'root_id']},'review':j.get('review')})
+                latest={}
+                for record in sorted(records,key=lambda j:(j['version'],j['created_at']),reverse=True):latest.setdefault(record['root_id'],record)
+                return self.send(sorted(latest.values(), key=lambda j: j['created_at'], reverse=True)[:100])
+            match = re.fullmatch(r'/api/job/([0-9a-f]{32})(?:/(file|original|report|review|page/\d+))?', path)
             if match:
                 job = load_job(match[1]); suffix = match[2]
                 if suffix is None:
                     return self.send(job)
+                if suffix == 'review':
+                    return self.send(review_store.details(workspace_path(),job['id']) or {'findings':[],'changes':[]})
                 if suffix == 'report':
                     return self.send(report(job), content_type='text/html; charset=utf-8',
                                      disposition="attachment; filename*=UTF-8''"+quote('Relatorio_Entrelinhas_v'+str(job['version'])+'.html'))
-                if suffix == 'reading':
-                    return self.send(reading.render(job),content_type='text/html; charset=utf-8',
-                                     disposition="attachment; filename*=UTF-8''"+quote('Leitura_'+job['filename']+'.html'))
                 if suffix in {'file', 'original'}:
                     material = load_job(job['root_id']) if suffix == 'original' else job
                     name = ('Material_v'+str(material['version'])+'_') + material['filename'] if suffix == 'file' else material['filename']
@@ -266,12 +345,8 @@ class Handler(BaseHTTPRequestHandler):
                 index = int(suffix.split('/')[1])
                 if not 0 <= index < len(job['analysis']['pages']) or job['extension'] != '.pdf':
                     raise MaterialError('Página não encontrada.')
-                with RENDER_LOCK:
-                    pdf = pdfium.PdfDocument(str(file_path(job)))
-                    page = pdf[index]; bitmap = page.render(scale=1.5)
-                    image = bitmap.to_pil(); output = BytesIO(); image.save(output, format='PNG')
-                    bitmap.close(); page.close(); pdf.close()
-                return self.send(output.getvalue(), content_type='image/png')
+                material_path=file_path(job)
+                return self.send(rendered_page(str(material_path),index,material_path.stat().st_mtime_ns), content_type='image/png')
             target = (STATIC / (path.lstrip('/') or 'index.html')).resolve()
             if STATIC.resolve() not in target.parents or not target.is_file():
                 return self.send({'error': 'Página não encontrada.'}, 404)
@@ -310,6 +385,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send({'error':'Entre na conta para editar seu perfil.'}, 401)
                 user = identity_store().update_profile(self.user['id'], body)
                 return self.send({'user':user,'scope':user['id']})
+            if path == '/api/account/password':
+                if not self.user:return self.send({'error':'Entre na conta para alterar sua senha.'},401)
+                database=identity_store();token=database.change_password(self.user['id'],body,self.client_address[0])
+                return self.send({'ok':True},headers={'Set-Cookie':database.cookie(token)})
             if path == '/api/account/logout':
                 database=identity_store();database.logout(self.headers.get('Cookie'))
                 return self.send({'user':None,'scope':'guest'},headers={'Set-Cookie':database.cookie('')})
@@ -346,7 +425,12 @@ class Handler(BaseHTTPRequestHandler):
                 workspace_store.remove_profile(workspace_path(),body.get('id'))
                 return self.send({'ok':True})
             if path == '/api/progress':
-                return self.send(workspace_store.save_progress(workspace_path(),load_job(body.get('id')),body))
+                with JOB_LOCK:
+                    job=load_job(body.get('id'))
+                    if (job.get('review') or {}).get('status')=='completed':return self.send({'review':job['review']})
+                    progress=workspace_store.save_progress(workspace_path(),job,body)
+                    progress['review']=review_store.sync(workspace_path(),job,progress['resolved'])
+                    return self.send(progress)
             if path in {'/api/history/clear','/api/history/restore'}:
                 with JOB_LOCK:
                     result=history_store.clear(data_path()) if path.endswith('/clear') else history_store.restore(data_path(),body.get('token'))
@@ -367,8 +451,37 @@ class Handler(BaseHTTPRequestHandler):
                 if len(content) > MAX_BYTES:
                     raise MaterialError('O limite por material é de 20 MB.')
                 parent = load_job(body['parent_id']) if body.get('parent_id') else None
+                if parent:require_editable(parent)
                 context = body.get('context', {})
                 return self.send(create_job(content, body.get('filename', ''), context, parent))
+            if path == '/api/ai/image-description':
+                if os.environ.get('RENDER') or not ipaddress.ip_address(self.client_address[0]).is_loopback:
+                    return self.send({'error':'A verificação com IA está disponível apenas na execução local.'},403)
+                job=load_job(body.get('id'))
+                require_editable(job)
+                issue=next((i for i in job['analysis']['issues'] if i['id']==body.get('issue_id')),None)
+                if not issue or issue.get('page') is None or issue.get('rule') not in {'alt_missing','alt_placeholder','alt_quality','image_review','pdf_figure_alt'}:
+                    raise MaterialError('Escolha um apontamento de descrição de imagem.')
+                block=next((b for b in job['analysis']['pages'][issue['page']]['blocks'] if b['id']==issue['block_id']),None)
+                if not block or not block.get('image'):raise MaterialError('A imagem deste apontamento não foi localizada.')
+                result=image_ai.verify(block['image'],body.get('description',''),str(workspace_path()),job_path(job['id'])/'ai_checks.json',block['id'],workspace_path())
+                return self.send(result)
+            if path == '/api/image-adjust':
+                job=load_job(body.get('id'))
+                require_editable(job)
+                issue=next((i for i in job['analysis']['issues'] if i['id']==body.get('issue_id')),None)
+                if not issue or not issue.get('quick_image'):raise MaterialError('Escolha uma imagem com ajustes rápidos disponíveis.')
+                block=next((b for b in job['analysis']['pages'][issue['page']]['blocks'] if b['id']==issue['block_id']),None)
+                if block is None:raise MaterialError('Imagem não encontrada.')
+                with JOB_LOCK,tempfile.TemporaryDirectory(dir=DATA.parent,prefix='image-edit-') as folder:
+                    destination=Path(folder)/('material'+job['extension'])
+                    image_quick_edit.apply(file_path(job),destination,block,body.get('value'))
+                    updated=create_job(destination.read_bytes(),job['filename'],dict(job['analysis']['context']),job,
+                        [{'title':'Ajuste rápido de imagem','location':issue['location'],'action':'image',
+                          'page':issue['page'],'block_id':issue['block_id'],'description_saved':bool((body.get('value') or {}).get('alt')),
+                          'before':block.get('alt') or '', 'value':body.get('value'),
+                          'note':'Confira a imagem e a legenda na nova versão.'}])
+                return self.send(updated)
             if path in {'/api/edit', '/api/assist'}:
                 job = load_job(body.get('id'))
                 if path == '/api/edit':
@@ -380,14 +493,9 @@ class Handler(BaseHTTPRequestHandler):
                         raise MaterialError('A assistência aplica somente ajustes técnicos compatíveis e revisados.')
                     requests = [{'issue_id': i} for i in selected]
                 return self.send(edit_job(job, requests))
-            if path=='/api/reading':
-                with JOB_LOCK:
-                    job=load_job(body.get('id'));job['reading']=reading.validate(job,body.get('reading'))
-                    temporary=job_path(job['id'])/'analysis.new'
-                    temporary.write_text(json.dumps(job,ensure_ascii=False),encoding='utf-8')
-                    temporary.replace(job_path(job['id'])/'analysis.json')
-                return self.send(job)
             return self.send({'error': 'Operação não encontrada.'}, 404)
+        except image_ai.ImageAIError as exc:
+            self.send({'error':str(exc)},400)
         except (MaterialError, ValueError, TypeError, KeyError) as exc:
             self.send({'error': str(exc) if isinstance(exc, MaterialError) else 'Confira os dados enviados e tente novamente.'}, 400)
         except Exception:

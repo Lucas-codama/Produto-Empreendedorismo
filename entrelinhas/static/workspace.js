@@ -1,8 +1,20 @@
 'use strict';
 let workspaceState={profiles:[],progress:{},resume:null},accountInfo={user:null,scope:'guest'},progressTimer=0,pendingProgress=null,progressChain=Promise.resolve();
-function reviewSnapshot(){return job && !job.is_example?{id:job.id,page:currentPage,issue_id:job.analysis.issues[selected]?.id ?? null,mode,reviewed:[...reviewed],filters:{...reviewFilters},scroll:window.scrollY}:null;}
+function captureReviewDraft(){
+  if(!job || job.review?.status==='completed')return;
+  const form=document.querySelector('#review-panel .quick-image-form,#review-panel .edit-form');if(!form)return;
+  const issue=job.analysis.issues[Number(form.dataset.index)];if(!issue)return;
+  const fields={};for(const input of form.elements){if(input.name && ['description','value','scale','visible'].includes(input.name))fields[input.name]=input.type==='checkbox'?input.checked:input.value;}
+  reviewDrafts[issue.id]=fields;
+}
+function restoreReviewDraft(){
+  const form=document.querySelector('#review-panel .quick-image-form,#review-panel .edit-form');if(!form || !job)return;
+  const issue=job.analysis.issues[Number(form.dataset.index)],draft=reviewDrafts[issue?.id];if(!draft)return;
+  for(const input of form.elements){if(!Object.hasOwn(draft,input.name))continue;const changed=input.value!==draft[input.name];if(input.type==='checkbox')input.checked=draft[input.name];else input.value=draft[input.name];if(changed && input.name==='description')input.dispatchEvent(new Event('input',{bubbles:true}));}
+}
+function reviewSnapshot(){return job && !job.is_example?{id:job.id,page:currentPage,issue_id:job.analysis.issues[selected]?.id ?? null,mode,reviewed:[...reviewed],resolved:[...resolved],drafts:reviewDrafts,filters:{...reviewFilters},scroll:window.scrollY}:null;}
 function saveReviewProgress(){
-  if(!job || job.is_example || currentView()!=='result')return;
+  if(!job || job.is_example || job.review?.status==='completed' || currentView()!=='result')return;
   const snapshot=reviewSnapshot();pendingProgress=snapshot;
   workspaceState.progress[job.id]=snapshot;workspaceState.resume={id:job.id,filename:job.filename,version:job.version};
   try{localStorage.setItem('entrelinhas-progress-'+storageScope+'-'+job.id,JSON.stringify(snapshot));}catch(_){}
@@ -11,7 +23,7 @@ function saveReviewProgress(){
 async function flushProgress(){
   clearTimeout(progressTimer);
   const snapshot=pendingProgress;pendingProgress=null;
-  if(snapshot){progressChain=progressChain.then(async()=>{try{await api('/api/progress',snapshot);$('progress-status').textContent='Revisão salva';}catch(_){$('progress-status').textContent='Servidor indisponível; posição salva no navegador';}});}
+  if(snapshot){progressChain=progressChain.then(async()=>{try{const response=await api('/api/progress',snapshot);if(job?.id===snapshot.id && response.review?.status==='completed'){job.review=response.review;workspaceState.resume=null;updateResume();render();recent();}$('progress-status').textContent=response.review?.status==='completed'?'Revisão concluída e salva':'Revisão salva';}catch(_){$('progress-status').textContent='Servidor indisponível; posição salva no navegador';}});}
   return progressChain;
 }
 function updateResume(){
@@ -151,7 +163,7 @@ function accountDialog(){
 $('account-button').addEventListener('click',accountDialog);
 function accountProfileEditor(){
   if(!accountInfo.user)return;
-  dialog('Editar perfil',`<form id="account-profile-form"><label>Seu nome<input name="name" id="account-name" required maxlength="60" autocomplete="name" value="${esc(accountInfo.user.name)}"></label><label>E-mail<input name="email" id="account-email" type="email" required maxlength="254" autocomplete="email" value="${esc(accountInfo.user.email)}"></label><div class="account-edit-actions"><button class="primary" type="submit">Salvar alterações</button><button class="text-button" type="button" id="account-edit-cancel">Cancelar</button></div><p id="account-edit-feedback" role="status"></p></form>`);
+  dialog('Editar perfil',`<form id="account-profile-form"><label>Seu nome<input name="name" id="account-name" required maxlength="60" autocomplete="name" value="${esc(accountInfo.user.name)}"></label><label>E-mail<input name="email" id="account-email" type="email" required maxlength="254" autocomplete="email" value="${esc(accountInfo.user.email)}"></label><div class="account-edit-actions"><button class="primary" type="submit">Salvar alterações</button><button class="text-button" type="button" id="account-edit-cancel">Cancelar</button></div><p id="account-edit-feedback" role="status"></p></form><details class="account-password-section"><summary>Alterar senha</summary><form id="account-password-form"><label>Senha atual<input name="current_password" type="password" required maxlength="128" autocomplete="current-password"></label><label>Nova senha<input name="new_password" type="password" required minlength="8" maxlength="128" autocomplete="new-password" aria-describedby="new-password-help"></label><p id="new-password-help">Use de 8 a 128 caracteres.</p><label>Confirmar nova senha<input name="password_confirmation" type="password" required minlength="8" maxlength="128" autocomplete="new-password"></label><button type="submit" class="primary">Alterar senha</button><p role="status"></p></form></details>`);
   $('account-name').focus();
 }
 let stopAccountConfetti=()=>{};
@@ -208,7 +220,7 @@ function mascotGaze(){
 $('dialog').addEventListener('focusin',mascotGaze);$('dialog').addEventListener('focusout',()=>queueMicrotask(mascotGaze));
 async function accountChanged(){
   navigationStack.length=0;pendingProgress=null;clearTimeout(progressTimer);
-  reviewed=new Set();reviewFilters={category:'all',status:'all'};
+  reviewed=new Set();resolved=new Set();reviewFilters={category:'all',status:'all'};
   resetContent();await initializeWorkspace();updateBack();
   $('history-feedback').hidden=!historyUndoToken;$('history-undo').hidden=!historyUndoToken;
   if(historyUndoToken)$('history-status').textContent='Você pode desfazer a última limpeza.';
@@ -216,6 +228,8 @@ async function accountChanged(){
 }
 $('dialog').addEventListener('close',()=>{if(!$('dialog').open){stopMascotTracking();$('dialog').classList.remove('auth-dialog');$('dialog-body').innerHTML='';}});
 $('dialog-body').addEventListener('input',event=>{
+  const passwordForm=event.target.closest('#account-password-form');
+  if(passwordForm){const confirmation=passwordForm.elements.password_confirmation;confirmation.setCustomValidity(confirmation.value && confirmation.value!==passwordForm.elements.new_password.value?'A confirmação da nova senha não coincide.':'');}
   if(event.target.closest('#auth-form')){
     mascotGaze();
     const confirmation=$('auth-password-confirmation');
@@ -223,6 +237,16 @@ $('dialog-body').addEventListener('input',event=>{
   }
 });
 $('dialog-body').addEventListener('submit',async event=>{
+  if(event.target.id==='account-password-form'){
+    event.preventDefault();const form=event.target,button=form.querySelector('[type=submit]'),feedback=form.querySelector('[role=status]');
+    button.disabled=true;feedback.textContent='';prepareReviewSound();
+    try{
+      const values=Object.fromEntries(new FormData(form));
+      if(values.new_password!==values.password_confirmation)throw new Error('A confirmação da nova senha não coincide.');
+      await api('/api/account/password',values);form.reset();feedback.textContent='Senha alterada com sucesso!';announce(feedback.textContent);celebrateReview('Senha alterada!');
+    }catch(error){if(feedback.isConnected)feedback.textContent=error.message;}
+    finally{button.disabled=false;}
+  }
   if(event.target.id==='account-profile-form'){
     event.preventDefault();const button=event.target.querySelector('[type=submit]');button.disabled=true;
     $('account-edit-feedback').textContent='';

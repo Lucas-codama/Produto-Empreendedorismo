@@ -70,22 +70,35 @@ def save_progress(folder, job, body):
     pages = len(job['analysis']['pages'])
     page = body.get('page', 0)
     reviewed = body.get('reviewed', [])
+    resolved = body.get('resolved', [])
+    eligible = {i['id'] for i in job['analysis']['issues'] if not i.get('action') and not i.get('quick_image')} | set(job.get('resolved_issues',[]))
+    if not isinstance(resolved,list) or len(resolved)>2000 or any(not isinstance(i,str) or i not in eligible for i in resolved):
+        raise MaterialError('Resolução inválida para essa análise.')
     if isinstance(page, bool) or not isinstance(page, int) or not 0 <= page < pages:
         raise MaterialError('Página inválida para essa análise.')
     if not isinstance(reviewed, list) or len(reviewed)>2000 or any(not isinstance(i,str) or i not in issues for i in reviewed):
         raise MaterialError('Conferência inválida para essa análise.')
     selected = body.get('issue_id')
+    drafts=body.get('drafts',{})
+    if not isinstance(drafts,dict) or len(drafts)>2000:
+        raise MaterialError('Rascunho inválido para essa análise.')
+    for identity,fields in drafts.items():
+        if identity not in issues or not isinstance(fields,dict) or set(fields)-{'description','value','scale','visible'}:
+            raise MaterialError('Rascunho inválido para essa análise.')
+        if any((name=='visible' and type(value) is not bool) or (name!='visible' and (not isinstance(value,str) or len(value)>3000)) for name,value in fields.items()):
+            raise MaterialError('Rascunho inválido para essa análise.')
     if selected is not None and selected not in issues:
         raise MaterialError('Apontamento não encontrado.')
     filters = body.get('filters', {})
-    if not isinstance(filters, dict) or filters.get('category','all') not in ('all','contrast','images','font','structure') or filters.get('status','all') not in ('all','pending','reviewed','human'):
+    if not isinstance(filters, dict) or filters.get('category','all') not in ('all','contrast','images','font','structure') or filters.get('status','all') not in ('all','pending','reviewed','resolved','human'):
         raise MaterialError('Filtro inválido.')
     scroll = body.get('scroll', 0)
     if not isinstance(scroll,(int,float)) or not math.isfinite(scroll) or not 0 <= scroll <= 100000:
         scroll = 0
-    progress = {'page':page,'issue_id':selected,'mode':'step' if body.get('mode')=='step' else 'side', 'reviewed':list(dict.fromkeys(reviewed)), 'filters':{'category':filters.get('category','all'),'status':filters.get('status','all')},'scroll':scroll}
+    progress = {'page':page,'issue_id':selected,'mode':'step' if body.get('mode')=='step' else 'side', 'reviewed':list(dict.fromkeys(reviewed)), 'resolved':list(dict.fromkeys(resolved)), 'filters':{'category':filters.get('category','all'),'status':filters.get('status','all')},'scroll':scroll}
     if is_example(job):
         return progress
+    progress['drafts']=drafts
     with LOCK:
         state = read(folder)
         state['progress'][job['id']] = progress

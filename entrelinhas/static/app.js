@@ -2,10 +2,11 @@
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let job = null, original = null, mode = 'side', selected = 0, currentPage = 0, file = null;
-let reviewed = new Set(), dialogReturnFocus = null;
+let resolvedNotice=null,finalPreviewJobId=null,reviewDrafts={};
+let reviewed = new Set(), resolved = new Set(), dialogReturnFocus = null;
 let storageScope='guest',reviewFilters={category:'all',status:'all'};
 const historyStorageKey=()=> 'entrelinhas-history-undo'+(storageScope==='guest'?'':'-'+storageScope);
-const visibleIssueIndexes=()=>job?ReviewRules.indexes(job.analysis.issues,reviewFilters,reviewed):[];
+const visibleIssueIndexes=()=>job?ReviewRules.indexes(job.analysis.issues,reviewFilters,resolved):[];
 let historyClearing=false,historyUndoToken=localStorage.getItem('entrelinhas-history-undo') || null;
 let navigationInProgress = false;
 const navigationStack=[];
@@ -16,23 +17,17 @@ function rememberPage(){
   navigationStack.push({view:currentView(),job,original,mode,selected,currentPage,file,filters:{...reviewFilters},context:context(),scrollY:window.scrollY});
   if(navigationStack.length>12)navigationStack.shift();updateBack();
 }
-function updateBack(){$('page-controls').hidden=!navigationStack.length;}
+function updateBack(){$('page-controls').hidden=currentView()==='home';}
+document.addEventListener('entrelinhas-view',updateBack);
 async function goBack(){
-  if(navigationInProgress || restoringPage || !navigationStack.length)return;
-  const previous=navigationStack.pop(),from=currentView();restoringPage=true;
-  const restore=async()=>{
-    job=previous.job;original=previous.original;mode=previous.mode;file=previous.file;
-    $('upload-view').hidden=!['home','context'].includes(previous.view);
-    $('start-panel').hidden=previous.view!=='home';$('context-panel').hidden=previous.view!=='context';
-    $('history-view').hidden=previous.view!=='history';$('result-view').hidden=previous.view!=='result';
-    setContext(previous.context);$('file-label').textContent=file?.name || '';
-    if(previous.view==='result') {await showJobContent(previous.job,false);selected=previous.selected;currentPage=previous.currentPage;reviewFilters=previous.filters || {category:'all',status:'all'};mode=previous.mode;render();}
-    else {nav(previous.view==='history'?'history':'analyze');if(previous.view==='history')await recent();}
-    updateBack();message('');window.scrollTo({top:previous.scrollY,behavior:'instant'});$('main').focus({preventScroll:true});announce('Você voltou à tela anterior.');
-  };
-  try{if((from==='history')!==(previous.view==='history'))await navigatePaper(from==='history'?'out':'in',restore);else await restore();}
-  catch(error){navigationStack.push(previous);message(error.message || 'Não foi possível voltar.');}
-  finally{restoringPage=false;updateBack();}
+  if(navigationInProgress || restoringPage)return;
+  restoringPage=true;$('go-back').disabled=true;
+  try{
+    if(currentView()==='result'){captureReviewDraft();saveReviewProgress();}
+    await flushProgress();navigationStack.length=0;resetContent();updateBack();
+    announce('Você voltou ao início. Seu andamento foi salvo.');
+  }catch(error){message(error.message || 'Não foi possível salvar o andamento. Tente novamente.');}
+  finally{restoringPage=false;$('go-back').disabled=false;}
 }
 
 function announce(text) { $('live').textContent = text; }
@@ -112,7 +107,8 @@ async function recent() {
     const jobs=await api('/api/jobs');
     if(historyClearing)return;
     $('history-clear').disabled=!jobs.length;
-    $('recent-list').innerHTML=jobs.length ? jobs.map(j=>`<button class="recent-item" data-open="${j.id}"><span class="history-file"><span class="file-badge" aria-hidden="true">${esc(j.filename.split('.').pop().toUpperCase())}</span><strong>${esc(j.filename)}</strong></span><small>v${j.version} · ${new Date(j.created_at).toLocaleDateString('pt-BR')}</small><span class="history-arrow" aria-hidden="true">↗</span></button>`).join('') : '<div class="empty-state">Você ainda não analisou nenhum material.</div>';
+    const section=(title,rows,done)=>`<section class="history-group"><h3>${title} <span>${rows.length}</span></h3>${rows.length?rows.map(j=>`<button class="recent-item" ${done?'data-review-record':'data-open'}="${j.id}"><span class="history-file"><span class="file-badge" aria-hidden="true">${esc(j.filename.split('.').pop().toUpperCase())}</span><strong>${esc(j.filename)}</strong></span><small>v${j.version} · ${done?'Concluída':'Em revisão'} · ${new Date(j.review?.completed_at || j.created_at).toLocaleDateString('pt-BR')}</small><span class="history-arrow" aria-hidden="true">${done?'✓':'↗'}</span></button>`).join(''):`<p class="muted">${done?'Nenhuma revisão concluída ainda.':'Nenhum material em revisão.'}</p>`}</section>`;
+    $('recent-list').innerHTML=jobs.length?`<div class="history-groups">${section('Em revisão',jobs.filter(j=>j.review?.status!=='completed'),false)}${section('Concluídos',jobs.filter(j=>j.review?.status==='completed'),true)}</div>`:'<div class="empty-state">Você ainda não analisou nenhum material.</div>';
   } catch (_) { $('history-clear').disabled=true;$('recent-list').innerHTML='<p class="muted">Não foi possível carregar o histórico.</p>'; }
 }
 
@@ -181,6 +177,7 @@ async function showJob(next, focus=true) {
   return showJobContent(next,focus);
 }
 async function showJobContent(next, focus=true) {
+  resolvedNotice=null;
   if(typeof flushProgress==='function')await flushProgress();
   job=next; original=job.root_id === job.id ? job : await api('/api/job/'+job.root_id);
   let saved;
@@ -189,24 +186,24 @@ async function showJobContent(next, focus=true) {
     if(!saved){try{saved=JSON.parse(localStorage.getItem('entrelinhas-progress-'+storageScope+'-'+job.id) || 'null');}catch(_){}}
     if(!saved && storageScope==='guest'){let old=[];try{old=JSON.parse(localStorage.getItem('entrelinhas-reviewed-'+job.id) || '[]');}catch(_){}saved={reviewed:old};}
   }
+  job.analysis.resolved_by_edit=job.resolved_issues || [];
+  if(!Array.isArray(saved?.resolved))saved={...saved,resolved:job.resolved_issues || []};
+  if(job.review?.status==='completed'){job.analysis.resolved_by_edit=job.analysis.issues.map(i=>i.id);saved={...saved,resolved:job.analysis.resolved_by_edit,filters:{category:'all',status:'pending'}};}
+  reviewDrafts=saved?.drafts || {};finalPreviewJobId=null;
   const restored=ReviewRules.restore(job.analysis,saved);
-  selected=restored.selected;currentPage=restored.page;mode=restored.mode;reviewed=restored.reviewed;reviewFilters=restored.filters;
+  selected=restored.selected;currentPage=restored.page;mode=restored.mode;reviewed=restored.reviewed;resolved=restored.resolved;reviewFilters=restored.filters;
+
   if(!job.is_example)localStorage.setItem('entrelinhas-last',job.id);
   $('upload-view').hidden=true; $('history-view').hidden=true; $('result-view').hidden=false; nav('analyze');
   const a=job.analysis;
   $('result-title').textContent=job.filename;
+  $('download-material').href='/api/job/'+job.id+'/file';
+  $('download-material').textContent='Baixar documento · v'+job.version;
   $('result-context').textContent=`${a.context.discipline} · ${a.context.activity} · Versão ${job.version}`;
-  $('stats').innerHTML=`<span class="analysis-count"><span class="count-dot" aria-hidden="true"></span><b>${a.counts.attention}</b> ${a.counts.attention===1?'ponto de atenção':'pontos de atenção'}</span>${a.counts.review?`<span class="analysis-count human"><b>${a.counts.review}</b> para conferir</span>`:''}${a.measured.unknown_contrast?`<span class="analysis-count incomplete" title="Esses trechos não tiveram o contraste medido.">Contraste pendente em ${a.measured.unknown_contrast} ${a.measured.unknown_contrast===1?'trecho':'trechos'}</span>`:''}`;
-  $('comparison').hidden=!job.comparison;
-  if (job.comparison) {
-    const c=job.comparison;
-    $('comparison').innerHTML=`<details><summary>Comparar com a versão ${c.previous_version}<span>${c.not_found} ${c.not_found===1?'item não reapareceu':'itens não reapareceram'}</span></summary><p>${c.persistent} persistentes · ${c.not_found} não reapareceram · ${c.new} novos.</p><p>${esc(c.note)}</p></details>`;
-  }
-  $('assist-button').disabled=!a.issues.some(i=>['font','contrast'].includes(i.action));
-  $('assist-button').hidden=$('assist-button').disabled;
-  $('assist-button').title=$('assist-button').disabled?'Não há ajustes técnicos compatíveis nesta análise.':'';
+  $('access-focus').textContent=a.access_context?'Ajustes para: '+a.access_context.label:'';
+  $('upload-revision').hidden=job.review?.status==='completed';
   render(); recent();
-  announce(`Análise concluída. ${a.counts.attention} ${a.counts.attention===1?'ponto':'pontos'} de atenção e ${a.counts.review} ${a.counts.review===1?'item':'itens'} para revisão.`);
+  announce(resolved.size?`Revisão carregada. ${a.issues.length-resolved.size} apontamentos pendentes. ${resolved.size} ${resolved.size===1?'resolvido':'resolvidos'} por você.`:`Análise concluída. ${a.counts.attention} ${a.counts.attention===1?'ponto':'pontos'} de atenção e ${a.counts.review} ${a.counts.review===1?'item':'itens'} para revisão.`);
   if (focus) { $('result-title').tabIndex=-1; $('result-title').focus({preventScroll:true}); window.scrollTo({top:saved?.scroll || 0,behavior:'instant'}); }
 }
 function nav(view) {
@@ -224,6 +221,7 @@ function reset() {
   resetContent();
 }
 function resetContent() {
+  resolvedNotice=null;
   $('upload-view').hidden=false; $('result-view').hidden=true; $('history-view').hidden=true;
   $('start-panel').hidden=false; $('context-panel').hidden=true; nav('analyze');
   $('material-form').reset();
@@ -295,20 +293,21 @@ async function paperFallback({direction,origin,getOrigin,covered}) {
 function blockMarkers(page,index,selectedIssue,which) {
   if (which!=='marked') return '';
   const grouped=new Map();
-  for (const issue of job.analysis.issues.filter(i=>i.page===index && ReviewRules.matches(i,reviewFilters,reviewed))) {
+  for (const issue of job.analysis.issues.filter(i=>i.page===index && ReviewRules.matches(i,reviewFilters,resolved))) {
     const b=page.blocks.find(b=>b.id===issue.block_id);
     if (!b || b.x===undefined || grouped.has(b.id)) continue;
     grouped.set(b.id,true);
   }
   return [...grouped.keys()].map(id=>{
     const b=page.blocks.find(b=>b.id===id);
-    const issue=selectedIssue?.page===index && selectedIssue.block_id===id?selectedIssue:job.analysis.issues.find(i=>i.page===index && i.block_id===id && ReviewRules.matches(i,reviewFilters,reviewed));
+    const issue=selectedIssue?.page===index && selectedIssue.block_id===id?selectedIssue:job.analysis.issues.find(i=>i.page===index && i.block_id===id && ReviewRules.matches(i,reviewFilters,resolved));
     const ix=job.analysis.issues.indexOf(issue);
     const active=selectedIssue && selectedIssue.block_id===id && selectedIssue.page===index;
     return `<button class="finding-marker ${active?'selected':''}" style="left:${b.x/page.width*100}%;top:${b.y/page.height*100}%;width:${Math.max(b.w/page.width*100,1)}%;height:${Math.max(b.h/page.height*100,1)}%" data-issue="${ix}" aria-label="Problema ${issue.number}: ${esc(issue.title)}"><span aria-hidden="true">${issue.number}</span></button>`;
   }).join('');
 }
 function selectPage(index) {
+  captureReviewDraft();resolvedNotice=null;
   currentPage=Math.max(0,Math.min(index,job.analysis.pages.length-1));
   const issues=job.analysis.issues;
   if(issues[selected]?.page!==null && issues[selected]?.page!==currentPage)selected=visibleIssueIndexes().find(index=>issues[index].page===currentPage) ?? -1;
@@ -332,7 +331,7 @@ function pageHTML(material,index,which='plain',large=false) {
     return `<div class="document-page slide" style="aspect-ratio:${page.width}/${page.height};container-type:inline-size;background:${page.background}">${blocks}${markers}</div>`;
   }
   return `<div class="document-page doc-flow" style="${page.background?'background-color:'+page.background+';':''}">${page.blocks.map(b=>{
-    const issues=which==='marked'?job.analysis.issues.filter(i=>i.page===index && i.block_id===b.id && ReviewRules.matches(i,reviewFilters,reviewed)):[];
+    const issues=which==='marked'?job.analysis.issues.filter(i=>i.page===index && i.block_id===b.id && ReviewRules.matches(i,reviewFilters,resolved)):[];
     const active=issues.length && chosen?.block_id===b.id && chosen?.page===index;
     const label=issues.length?`<span class="flow-label">${issues.map(i=>'Item '+i.number).join(' · ')} · ${esc(b.location || page.label)}</span>`:'';
     let content;
@@ -342,6 +341,10 @@ function pageHTML(material,index,which='plain',large=false) {
     return `<div class="flow-block ${issues.length?'marked':''} ${active?'selected':''}" style="${b.background?'background-color:'+b.background+';':''}">${label}${content}</div>`;
   }).join('')}</div>`;
 }
+function completedPreview(){
+  const options=job.analysis.pages.map((page,index)=>`<option value="${index}" ${index===currentPage?'selected':''}>${esc(page.label)}</option>`).join('');
+  return `<section class="completed-preview"><div class="completed-preview-toolbar"><h3>Prévia da versão final</h3><label>Página<select id="completed-page" aria-label="Selecionar página da versão final">${options}</select></label><button class="text-button" type="button" data-final-zoom>Ampliar ↗</button></div><div class="completed-preview-paper">${pageHTML(job,currentPage,'plain',true)}</div></section>`;
+}
 function preview(side=true) {
   const page=job.analysis.pages[currentPage];
   const options=job.analysis.pages.map((p,i)=>`<option value="${i}" ${i===currentPage?'selected':''}>${esc(p.label)}</option>`).join('');
@@ -349,22 +352,56 @@ function preview(side=true) {
   const scope=issue?issue.page===null?'Conferência do documento inteiro. Use as páginas para conferir a sequência.':`${page.label} · ${issue.block_id==='document'?'Conferência da página; sem posição exata identificada.':'O elemento selecionado está marcado na revisão.'}`:`${page.label} · Nenhum apontamento específico nesta página.`;
   return `<div class="preview-card paper-board"><div class="board-clip" aria-hidden="true"></div><div class="preview-toolbar"><span class="format-chip">${esc(job.analysis.info.format)}</span><div><button class="text-button" data-zoom="1">Ampliar ↗</button> <select id="page-select" aria-label="Selecionar página ou grupo de trechos">${options}</select></div></div><p class="preview-scope">${esc(scope)}</p><div class="preview-columns">${side?`<div class="paper-column"><div class="preview-title">Original <span>v1</span></div>${pageHTML(original,currentPage)}</div>`:''}<div class="paper-column"><div class="preview-title">Revisão <span>v${job.version}</span></div>${pageHTML(job,currentPage,'marked')}</div></div><details class="preview-note"><summary>Sobre a prévia</summary><p>${esc(job.analysis.info.preview)}</p></details></div>`;
 }
+function quickImageForm(issue,index){
+  const access=job.analysis.access_context || {},block=job.analysis.pages[issue.page].blocks.find(b=>b.id===issue.block_id);
+  const aiUsage=job.ai_checks?.[issue.block_id] || {used:0,remaining:2};
+  const description=aiUsage.result?aiUsage.description:block?.alt || block?.caption || '';
+  const previousAI=aiUsage.result && aiUsage.description===description?aiUsage.result:null;
+  return `<form class="quick-image-form" data-index="${index}" data-alt-supported="true"><h4>Editar imagem</h4><label>Descrição da imagem<textarea name="description" rows="4" maxlength="3000" placeholder="O que o aluno precisa saber sobre esta imagem?">${esc(description)}</textarea></label><div class="image-ai-tools"><button type="button" class="secondary" data-ai-check ${aiUsage.remaining===0?'disabled':''}>${aiUsage.remaining===0?'Descrição já aprovada':'Verificar com IA'}</button><div class="image-ai-result" role="status" ${previousAI?'':'hidden'}>${previousAI?imageAIResultHTML(previousAI):''}</div></div><label>Ampliação<select name="scale"><option value="1">Manter tamanho</option><option value="1.25">Aumentar 25%</option><option value="1.5">Aumentar 50%</option><option value="2">Aumentar 100%</option></select></label><label class="quick-caption-check"><input type="checkbox" name="visible" ${access.magnification || block?.caption?'checked':''}>Mostrar a descrição como legenda</label><button class="primary" type="submit">Salvar imagem e verificar</button><p class="quick-image-feedback" role="status"></p></form>`;
+}
+function contrastRatio(first,second){
+  const luminance=color=>{const c=[1,3,5].map(index=>parseInt(color.slice(index,index+2),16)/255).map(value=>value<=.04045?value/12.92:((value+.055)/1.055)**2.4);return .2126*c[0]+.7152*c[1]+.0722*c[2];};
+  const a=luminance(first),b=luminance(second);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);
+}
+function resolvedNoticeHTML(){
+  if(!resolvedNotice)return '';
+  const pending=job.analysis.issues.some(issue=>!resolved.has(issue.id));
+  return `<section class="resolved-notice" role="status"><span class="resolved-notice-icon" aria-hidden="true">✓</span><div><span class="resolved-notice-badge">Resolvido</span><h3 tabindex="-1">${esc(resolvedNotice.title)}</h3><p>${esc(resolvedNotice.location)}</p><p>${resolvedNotice.manual?'Você marcou este ponto como resolvido.':'A alteração foi salva e este ponto foi resolvido.'}</p>${pending?'<button type="button" class="secondary" data-next-pending>Continuar revisão</button>':''}</div></section>`;
+}
 function issueDetail(i,index,compact=false) {
+  if(resolvedNotice)return resolvedNoticeHTML();
+  if(i && resolved.has(i.id))return `<section class="resolved-notice"><span class="resolved-notice-icon">✓</span><div><span class="resolved-notice-badge">Resolvido</span><h3>${esc(i.title)}</h3><p>${esc(i.location)}</p></div></section>`;
+  if(job.review?.status==='completed')return '<p>Revisão concluída. Consulte o registro no histórico.</p>';
   if(!i && !visibleIssueIndexes().length && job.analysis.issues.length)return '<div class="empty-state"><h3>Nenhum item nesses filtros</h3><p>Mude o tipo ou a conferência para ver outros apontamentos.</p></div>';
   if (!i) return '<div class="empty-state"><span class="empty-flower" aria-hidden="true">✳</span><h3>Nenhum apontamento nesta página</h3><p>Escolha outro apontamento ou avance para continuar a revisão.</p></div>';
   let action='';
   if(i.image)action+=`<details class="image-check"><summary>Ver imagem</summary><img src="${esc(i.image)}" alt="Imagem sob revisão. A descrição encontrada está no painel de apontamentos.">${i.image_text?`<p><strong>Texto reconhecido:</strong> ${esc(i.image_text)}</p>`:''}</details>`;
-  if (i.action==='alt') action+=`<form class="edit-form" data-index="${index}"><label>Descrição da imagem<textarea name="value" rows="3" required maxlength="3000" placeholder="O que é necessário para compreender a imagem?">${esc(['alt_quality','alt_placeholder'].includes(i.rule)?job.analysis.pages[i.page].blocks.find(b=>b.id===i.block_id)?.alt || '':'')}</textarea></label><button class="primary" type="submit">Salvar e verificar <span aria-hidden="true">↗</span></button></form>`;
-  if (i.action==='font') action=`<form class="edit-form" data-index="${index}"><label>Fonte (pt)<input name="value" type="number" min="6" max="96" step="0.5" required value="${job.analysis.context.min_font}"></label><button class="primary" type="submit">Aplicar e verificar <span aria-hidden="true">↗</span></button></form>`;
-  if (i.action==='contrast') action=`<button class="primary" data-correct="${index}">Corrigir contraste <span aria-hidden="true">↗</span></button>`;
-  const isReviewed=reviewed.has(i.id);
-  return `<div class="issue-detail"><span class="issue-category ${i.severity}"><span aria-hidden="true">${i.severity==='review'?'✳':'●'}</span> ${i.severity==='review'?'Conferência humana':'Ponto de atenção'} · ${esc(i.location)}</span><h3 tabindex="-1">${esc(i.title)}</h3><p class="issue-fact">${esc(i.explanation)}</p>${i.evidence?`<div class="evidence"><strong>${['alt_quality','alt_placeholder'].includes(i.rule)?'Descrição encontrada':'Identificado'}</strong><br>${esc(i.evidence)}</div>`:''}<p class="issue-guidance">${esc(i.suggestion)}</p>${i.text?`<details class="issue-more"><summary>Ver trecho <span aria-hidden="true">＋</span></summary><p>“${esc(i.text)}”</p></details>`:''}${action}<button class="text-button review-button" data-review="${index}" aria-pressed="${isReviewed}" title="Esta marcação pessoal não altera o diagnóstico.">${isReviewed?'✓ Conferido por mim':'Conferi este ponto'}</button>${isReviewed?'<span class="reviewed-label">Sua conferência não altera o diagnóstico.</span>':''}</div>`;
+  if (i.action==='alt' && !i.quick_image) action+=`<form class="edit-form" data-index="${index}"><label>Descrição da imagem<textarea name="value" rows="3" required maxlength="3000" placeholder="O que é necessário para compreender a imagem?">${esc(['alt_quality','alt_placeholder'].includes(i.rule)?job.analysis.pages[i.page].blocks.find(b=>b.id===i.block_id)?.alt || '':'')}</textarea></label><button class="primary" type="submit">Salvar e verificar <span aria-hidden="true">↗</span></button></form>`;
+  if (i.action==='font') action+=`<form class="edit-form" data-index="${index}"><label>Fonte (pt)<input name="value" type="number" min="6" max="96" step="0.5" required value="${job.analysis.context.min_font}"></label><button class="primary" type="submit">Aplicar e verificar <span aria-hidden="true">↗</span></button></form>`;
+  if (i.action==='contrast') {
+    const background=i.background || '#FFFFFF';
+    const suggested=contrastRatio('#000000',background)>=contrastRatio('#FFFFFF',background)?'#000000':'#FFFFFF';
+    action=`<form class="edit-form contrast-editor" data-index="${index}"><h4>Alterar a cor pelo site</h4><p>Escolha a cor e confira a amostra antes de salvar.</p><label>Cor do texto<input name="value" type="color" value="${suggested}" data-contrast-color data-background="${esc(background)}"></label><div class="contrast-sample" style="background:${esc(background)};color:${suggested}" aria-label="Amostra da combinação de cores">Texto de exemplo</div><p class="contrast-sample-info">${contrastRatio(suggested,background).toFixed(2)}:1 sobre o fundo identificado${i.explanation.includes('estim')?' (estimado)':''}.</p>${job.extension==='.pdf'?'<p>Confira o resultado na página depois de salvar.</p>':''}<button class="primary" type="submit">Salvar cor e verificar <span aria-hidden="true">↗</span></button></form>`;
+  }
+  if(i.rule==='contrast' && !i.action)action+='<p class="contrast-edit-limit">Este trecho não permite um ajuste rápido. Corrija no editor original e envie a nova versão.</p>';
+
+  if(i.action==='language')action+=`<form class="edit-form" data-index="${index}"><label>Idioma do documento<input name="value" required maxlength="35" value="pt-BR" placeholder="pt-BR, en-US ou es-ES"></label><p>O idioma orienta a pronúncia do leitor de tela; não traduz o conteúdo.</p><button class="primary" type="submit">Salvar idioma e verificar</button></form>`;
+  if(i.action==='heading')action+=`<form class="edit-form" data-index="${index}"><label>Alterar para<select name="value">${[1,2,3,4,5,6].map(level=>`<option value="H${level}" ${level===(i.heading_context?.suggested_level || 1)?'selected':''}>Título ${level}${level===i.heading_context?.suggested_level?' (sugerido)':''}</option>`).join('')}</select></label><button class="primary" type="submit">Salvar nível e verificar</button></form>`;
+  if(i.action==='slide_title')action+=`<form class="edit-form" data-index="${index}"><label>Título do slide<input name="value" maxlength="200" required placeholder="O assunto principal deste slide"></label><p>O título será inserido no slide. Confira o espaço e possíveis sobreposições depois de salvar.</p><button class="primary" type="submit">Salvar título e verificar</button></form>`;
+  if(i.action==='table_headers')action+=`<form class="edit-form" data-index="${index}"><p>Use somente se a primeira linha contiver os nomes das colunas.</p><button class="primary" type="submit">Marcar primeira linha como cabeçalho</button></form>`;
+  if(i.quick_image)action+=quickImageForm(i,index);
+  const resolution=(ReviewRules.canResolve(i) || resolved.has(i.id))?`<div class="manual-resolution"><button class="secondary" data-resolve="${index}" aria-pressed="${resolved.has(i.id)}">${resolved.has(i.id)?'Reabrir apontamento':'Marcar como resolvido'}</button>${resolved.has(i.id)?'<p role="status">Resolvido por você. Essa marcação não altera o arquivo.</p>':''}</div>`:'';
+  const h=i.heading_context;
+  const headingTarget=h?`<div class="heading-target"><strong>Título com problema</strong>${h.text?`<blockquote>“${esc(h.text)}”</blockquote>`:'<p>Não foi possível extrair o texto deste título nem localizar sua posição na página.</p>'}<p>${h.previous_level?`Título ${h.previous_level} → <strong>Título ${h.level}</strong>`:`Primeiro título: <strong>Título ${h.level}</strong>`}</p>${h.previous_text?`<p class="heading-previous">Título anterior: “${esc(h.previous_text)}”</p>`:''}${h.located?'<p>O trecho está destacado na prévia da revisão.</p>':h.text?'<p>A posição exata deste título não foi localizada na prévia.</p>':''}</div>`:'';
+  return `<div class="issue-detail"><span class="issue-category ${i.severity}"><span aria-hidden="true">${i.severity==='review'?'✳':'●'}</span> ${i.severity==='review'?'Conferência humana':'Ponto de atenção'} · ${esc(i.location)}</span><h3 tabindex="-1">${esc(i.title)}</h3>${headingTarget}<p class="issue-fact">${esc(i.explanation)}</p>${i.rule==='contrast'?`<details class="evidence"><summary>Ver as cores e os valores medidos</summary><p>${esc(i.evidence)}</p></details>`:i.evidence?`<details class="evidence"><summary>Ver detalhes</summary><strong>${['alt_quality','alt_placeholder'].includes(i.rule)?'Descrição encontrada':'Identificado'}</strong><br>${esc(i.evidence)}</details>`:''}<p class="issue-guidance">${esc(i.suggestion)}</p>${i.text && !h?`<details class="issue-more"><summary>Ver trecho <span aria-hidden="true">＋</span></summary><p>“${esc(i.text)}”</p></details>`:''}${action}${resolution}</div>`;
 }
 function issuePicker(issues) {
+  if(resolvedNotice)return "";
   const visible=visibleIssueIndexes();
   return visible.length?`<div class="issue-picker"><label for="issue-select">Apontamento</label><select id="issue-select" aria-label="Escolher apontamento">${selected<0?'<option value="-1" selected disabled>Nenhum nesta página</option>':''}${visible.map((index,position)=>`<option value="${index}" ${index===selected?'selected':''}>${position+1} de ${visible.length} · ${esc(issues[index].location)} · ${esc(issues[index].title)}</option>`).join('')}</select></div>`:'';
 }
 function issueControls(issues) {
+  if(resolvedNotice)return "";
   const visible=visibleIssueIndexes();
   if(!visible.length)return '';
   return `<div class="step-controls" aria-label="Navegar pelos apontamentos"><button class="secondary small" data-step="-1" ${adjacentIssue(-1)<0?'disabled':''}>← Anterior</button><span class="step-counter">${visible.indexOf(selected)+1} / ${visible.length}</span><button class="secondary small" data-step="1" ${adjacentIssue(1)<0?'disabled':''}>Próximo →</button></div>`;
@@ -381,6 +418,8 @@ function render() {
   const visible=visibleIssueIndexes();
   if(selected>=0 && !visible.includes(selected)){selected=visible[0] ?? -1;const next=job.analysis.issues[selected];if(next?.page!==null && next?.page!==undefined)currentPage=next.page;}
   $('filter-category').value=reviewFilters.category;$('filter-status').value=reviewFilters.status;
+  const pending=job.analysis.issues.filter(issue=>!resolved.has(issue.id)),attention=pending.filter(issue=>issue.severity!=='review').length,human=pending.length-attention;
+  $('stats').innerHTML=`<span class="analysis-count"><span class="count-dot" aria-hidden="true"></span><b>${attention}</b> ${attention===1?'ponto pendente':'pontos pendentes'}</span>${human?`<span class="analysis-count human"><b>${human}</b> para conferir</span>`:''}${resolved.size?`<span class="analysis-count human">${resolved.size} ${resolved.size===1?'resolvido por você':'resolvidos por você'}</span>`:''}${job.analysis.measured.unknown_contrast?`<span class="analysis-count incomplete" title="Esses trechos não tiveram o contraste medido.">Contraste pendente em ${job.analysis.measured.unknown_contrast} trechos</span>`:''}`;
   $('filter-count').textContent=`${visible.length} de ${job.analysis.issues.length} itens`;
   $('filters-clear').hidden=reviewFilters.category==='all' && reviewFilters.status==='all';
   document.querySelectorAll('.tabs [role=tab]').forEach(b=>{
@@ -389,23 +428,39 @@ function render() {
   $('review-panel').setAttribute('aria-labelledby','tab-'+mode);
   const issues=job.analysis.issues;
   const issue=issues[selected];
-  if (mode==='side') {
-    $('review-panel').innerHTML=`<div class="review-grid">${preview()}<aside class="issues-panel note-card" aria-label="Apontamentos da análise">${issuePicker(issues)}${issueDetail(issue,selected)}${issueControls(issues)}</aside></div>`;
-  } else if (mode==='step') {
-    $('review-panel').innerHTML=`<div class="step-layout">${preview(false)}<div class="step-note note-card">${issuePicker(issues)}${issueDetail(issue,selected)}${issueControls(issues)}</div></div>`;
+  const panel=$('review-panel'),key=[job.id,original.id,currentPage,mode].join(':'),oldPreview=panel.querySelector('.preview-card');
+  const reuse=oldPreview && panel.dataset.previewKey===key && job.analysis.pages[currentPage].kind!=='flow';
+  if(job.review?.status==='completed' || (!pending.length && reviewFilters.status!=='resolved' && reviewFilters.status!=='all')){
+    if(finalPreviewJobId!==job.id){currentPage=0;finalPreviewJobId=job.id;}
+    panel.innerHTML=`<div class="review-complete" tabindex="-1"><span aria-hidden="true">✓</span><h3>Revisão concluída!</h3><p>Todos os apontamentos desta versão foram tratados. Consulte as alterações no histórico.</p>${resolvedNoticeHTML()}${completedPreview()}<a class="primary review-download" href="/api/job/${job.id}/file">Baixar nova versão</a></div>`;
+    panel.dataset.previewKey='';
+  }else{
+    const paper=reuse?'<div data-preview-slot></div>':preview(mode==='side');
+    const template=document.createElement('template');
+    template.innerHTML=mode==='side'?`<div class="review-grid">${paper}<aside class="issues-panel note-card" aria-label="Apontamentos da análise">${issuePicker(issues)}${issueDetail(issue,selected)}${issueControls(issues)}</aside></div>`:`<div class="step-layout">${paper}<div class="step-note note-card">${issuePicker(issues)}${issueDetail(issue,selected)}${issueControls(issues)}</div></div>`;
+    if(reuse){
+      template.content.querySelector('[data-preview-slot]').replaceWith(oldPreview);
+      const current=oldPreview.querySelector('.paper-column:last-child .document-page');
+      current?.querySelectorAll('.finding-marker').forEach(marker=>marker.remove());
+      current?.insertAdjacentHTML('beforeend',blockMarkers(job.analysis.pages[currentPage],currentPage,issue,'marked'));
+      oldPreview.querySelector('.preview-scope').textContent=issue?.page===null?'Conferência do documento inteiro. Use as páginas para conferir a sequência.':job.analysis.pages[currentPage].label+' · O elemento selecionado está marcado na revisão.';
+    }
+    panel.replaceChildren(template.content);panel.dataset.previewKey=key;
   }
+  restoreReviewDraft();
   if(typeof saveReviewProgress==='function')saveReviewProgress();
 }
 function animateReview() {
-  const panel=$('review-panel');panel.getAnimations().forEach(a=>a.cancel());
+  const panel=document.querySelector('.issues-panel,.step-note');if(!panel)return;panel.getAnimations().forEach(a=>a.cancel());
   if(motionPaused || motionPreference.matches)return;
-  panel.animate([{opacity:0,transform:'translateY(16px) scale(.988) rotateX(2deg)'},{opacity:1,transform:'translateY(0) scale(1) rotateX(0deg)'}],{duration:480,easing:'cubic-bezier(.22,1,.36,1)'});
+  panel.animate([{opacity:0,transform:'translateY(6px)'},{opacity:1,transform:'translateY(0)'}],{duration:180,easing:'cubic-bezier(.22,1,.36,1)'});
 }
 function switchMode(next,focus=false) {
   if(!['side','step'].includes(next))return;
   mode=next;render();animateReview();if(focus)$('tab-'+mode).focus();announce('Modo '+$('tab-'+mode).textContent);
 }
 function selectIssue(index,focus=false) {
+  captureReviewDraft();resolvedNotice=null;
   selected=Math.max(0,Math.min(index,job.analysis.issues.length-1));
   const i=job.analysis.issues[selected]; if (i && i.page!==null) currentPage=i.page;
   render();
@@ -417,10 +472,25 @@ function dialog(title,html) {
   dialogReturnFocus=document.activeElement; $('dialog-title').textContent=title;
   $('dialog-body').innerHTML=html; $('dialog').showModal();
 }
+async function acceptEditedJob(next,previousResolved,previousIssue){
+  const ids=new Set(next.analysis.issues.map(i=>i.id));
+  next.resolved_issues=[...new Set([...(next.resolved_issues || []),...previousResolved])].filter(id=>ids.has(id));
+  const scroll=window.scrollY;
+  await showJob(next,false);
+  reviewFilters.status='all';
+  const stillPending=previousIssue && next.analysis.issues.some(issue=>issue.rule===previousIssue.rule && issue.page===previousIssue.page && issue.block_id===previousIssue.block_id && !resolved.has(issue.id));
+  resolvedNotice=previousIssue && !stillPending?{title:previousIssue.title,location:previousIssue.location,manual:false}:null;
+  selected=previousIssue?next.analysis.issues.findIndex(issue=>issue.id===previousIssue.id):-1;
+  if(selected<0)selected=visibleIssueIndexes()[0] ?? -1;
+  if(selected>=0 && job.analysis.issues[selected].page!==null)currentPage=job.analysis.issues[selected].page;
+  render();window.scrollTo({top:scroll,behavior:'instant'});
+  (document.querySelector('.resolved-notice h3,.issue-detail h3,.review-complete') || $('result-title')).focus({preventScroll:true});
+}
 async function correction(index,value) {
-  const issue=job.analysis.issues[index];
+  const issue=job.analysis.issues[index],identity=job.id,previousResolved=[...resolved];prepareReviewSound();
   if ($('dialog').open) $('dialog').close();
-  await run(async()=>showJob(await api('/api/edit',{id:job.id,issue_id:issue.id,value})), 'Salvando a alteração e verificando a nova versão');
+  const updated=await run(async()=>{await flushProgress();const next=await api('/api/edit',{id:identity,issue_id:issue.id,value});if(job?.id!==identity)return null;await acceptEditedJob(next,previousResolved,issue);return next;}, 'Salvando a alteração e verificando a nova versão');
+  if(updated)celebrateReview(visibleIssueIndexes().length?'Alteração salva!':'Revisão concluída!');
 }
 
 $('file-input').addEventListener('change',e=>chooseFile(e.target.files[0]));
@@ -503,6 +573,7 @@ $('motion-button').addEventListener('click',()=>{motionPaused=!motionPaused;loca
 motionPreference.addEventListener('change',e=>{motionPaused=e.matches;updateMotion();});
 updateMotion();
 $('recent-list').addEventListener('click',e=>{const b=e.target.closest('[data-open]');if(b)run(async()=>showJob(await api('/api/job/'+b.dataset.open)),'Abrindo a análise');});
+$('recent-list').addEventListener('click',e=>{const b=e.target.closest('[data-review-record]');if(b)run(()=>showReviewRecord(b.dataset.reviewRecord),'Abrindo revisão concluída');});
 $('upload-revision').addEventListener('click',()=>$('revision-input').click());
 $('revision-input').addEventListener('change',async e=>{
   const revision=e.target.files[0];if(!revision)return;
@@ -517,23 +588,37 @@ document.querySelector('.tabs').addEventListener('keydown',e=>{
   index=e.key==='Home'?0:e.key==='End'?1:(index+(e.key==='ArrowRight'?1:-1)+names.length)%names.length;
   switchMode(names[index],true);
 });
-$('review-panel').addEventListener('change',e=>{if(e.target.id==='page-select'){selectPage(Number(e.target.value));$('page-select')?.focus();}if(e.target.id==='issue-select'){selectIssue(Number(e.target.value));animateReview();$('issue-select')?.focus();}});
+$('review-panel').addEventListener('change',e=>{if(e.target.id==='completed-page'){currentPage=Number(e.target.value);render();$('completed-page')?.focus({preventScroll:true});}if(e.target.id==='page-select'){selectPage(Number(e.target.value));$('page-select')?.focus();}if(e.target.id==='issue-select'){selectIssue(Number(e.target.value));animateReview();$('issue-select')?.focus();}});
 $('review-panel').addEventListener('submit',e=>{const f=e.target.closest('.edit-form');if(f){e.preventDefault();correction(Number(f.dataset.index),new FormData(f).get('value'));}});
+$('review-panel').addEventListener('submit',async event=>{
+  const form=event.target.closest('.quick-image-form');if(!form)return;
+  event.preventDefault();const values=Object.fromEntries(new FormData(form)),issue=job.analysis.issues[Number(form.dataset.index)],identity=job.id;
+  const feedback=form.querySelector('.quick-image-feedback'),button=form.querySelector('[type=submit]');
+  const description=values.description.trim(),value={scale:Number(values.scale)};
+  if(description && form.dataset.altSupported==='true')value.alt=description;
+  if(values.visible && description)value.caption=description;
+  if(value.scale===1 && !value.alt && !value.caption){feedback.textContent='Escreva a descrição ou escolha uma ampliação.';return;}
+  prepareReviewSound();const previousResolved=[...resolved];button.disabled=true;feedback.textContent='Salvando…';
+  try{await flushProgress();const next=await api('/api/image-adjust',{id:identity,issue_id:issue.id,value});if(job?.id===identity){await acceptEditedJob(next,previousResolved,issue);celebrateReview(visibleIssueIndexes().length?'Imagem atualizada!':'Revisão concluída!');}}
+  catch(error){if(feedback.isConnected)feedback.textContent=error.message;}
+  finally{button.disabled=false;}
+});
+$('review-panel').addEventListener('input',event=>{
+  if(!event.target.matches('[data-contrast-color]'))return;
+  const input=event.target,form=input.closest('.contrast-editor');
+  form.querySelector('.contrast-sample').style.color=input.value;
+  form.querySelector('.contrast-sample-info').textContent=contrastRatio(input.value,input.dataset.background).toFixed(2)+':1 sobre o fundo identificado. O resultado final será verificado depois de salvar.';
+});
 $('review-panel').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
   if(b.dataset.issue!==undefined){selectIssue(Number(b.dataset.issue));animateReview();$('issue-select')?.focus({preventScroll:true});}
   if(b.dataset.step){const target=adjacentIssue(Number(b.dataset.step));if(target>=0){selectIssue(target,true);animateReview();}}
+  if(b.hasAttribute('data-show-resolved')){reviewFilters={category:'all',status:'resolved'};selected=visibleIssueIndexes()[0] ?? -1;render();return;}
+  if(b.hasAttribute('data-next-pending')){resolvedNotice=null;reviewFilters.status='all';const next=job.analysis.issues.findIndex(issue=>!resolved.has(issue.id));if(next>=0)selectIssue(next,true);return;}
+  if(b.dataset.resolve!==undefined){const issue=job.analysis.issues[Number(b.dataset.resolve)];if(!issue || (!ReviewRules.canResolve(issue) && !resolved.has(issue.id)))return;const reopening=resolved.has(issue.id);prepareReviewSound();reopening?resolved.delete(issue.id):resolved.add(issue.id);resolvedNotice=reopening?null:{title:issue.title,location:issue.location,manual:true};reviewFilters.status='all';render();(document.querySelector('.resolved-notice h3,.issue-detail h3,.review-complete') || $('filter-status')).focus({preventScroll:true});announce(reopening?'Apontamento reaberto.':'Marcado como resolvido por você.');if(!reopening)celebrateReview(job.analysis.issues.some(i=>!resolved.has(i.id))?'Ponto resolvido!':'Revisão concluída!');}
   if(b.dataset.correct!==undefined){correction(Number(b.dataset.correct));}
-  if(b.dataset.review!==undefined){const i=job.analysis.issues[Number(b.dataset.review)];reviewed.has(i.id)?reviewed.delete(i.id):reviewed.add(i.id);if(!job.is_example)localStorage.setItem('entrelinhas-reviewed-'+job.id,JSON.stringify([...reviewed]));render();(document.querySelector(`[data-review="${selected}"]`) || $('filter-status')).focus({preventScroll:true});announce(reviewed.has(i.id)?'Item marcado como conferido por você.':'Conferência desmarcada.');}
+  if(b.hasAttribute('data-final-zoom')){dialog('Prévia da versão final',pageHTML(job,currentPage,'plain',true));}
   if(b.dataset.zoom){dialog(job.analysis.pages[currentPage].label,`<p class="muted">Prévia ampliada da versão ${job.version}. ${esc(job.analysis.info.preview)}</p>${pageHTML(job,currentPage,'marked',true)}`);}
-});
-$('assist-button').addEventListener('click',()=>{
-  const eligible=job.analysis.issues.filter(i=>['font','contrast'].includes(i.action));
-  dialog('Revise os ajustes antes de aplicar',`<p>Selecione os ajustes técnicos que deseja aplicar ao material. Será criada uma nova versão; o original permanece disponível.</p><form id="assist-form"><div class="assist-list">${eligible.slice(0,100).map(i=>`<label class="assist-option"><input type="checkbox" name="issues" value="${esc(i.id)}" checked><span><strong>${esc(i.title)}</strong><small>${esc(i.location)} · ${esc(i.evidence)}</small></span></label>`).join('')}</div><p>Descrições de imagens e o sentido da atividade continuam sob sua revisão. Mudanças de tamanho podem alterar o espaço ocupado pelo texto.</p><button class="primary" type="submit">Aplicar os ajustes selecionados</button></form>`);
-});
-$('dialog-body').addEventListener('submit',e=>{
-  if(e.target.id==='assist-form'){e.preventDefault();const selectedIssues=new FormData(e.target).getAll('issues');if(!selectedIssues.length)return;
-    $('dialog').close();run(async()=>showJob(await api('/api/assist',{id:job.id,issues:selectedIssues})),'Aplicando os ajustes e verificando a nova versão');}
 });
 $('dialog-body').addEventListener('click',e=>{const b=e.target.closest('[data-issue]');if(b){$('dialog').close();selectIssue(Number(b.dataset.issue),true);}});
 $('close-dialog').addEventListener('click',()=>$('dialog').close());
