@@ -52,12 +52,13 @@ const workspaceReady=initializeWorkspace();
 $('profile-select').addEventListener('change',()=>{
   const profile=workspaceState.profiles.find(p=>p.id===$('profile-select').value);
   if(!profile)return;
-  $('needs').value=profile.needs;$('technology').value=profile.technology;$('min-font').value=profile.min_font ?? '';
+  AccessProfile.write($('access-profile'),profile.access_preferences,profile.technology);
+  $('needs').value=profile.needs;$('min-font').value=profile.min_font ?? '';
   announce('Perfil '+profile.name+' aplicado. Confira se atende a este estudante.');
 });
 function profileEditor(profile=null){
   const values=profile || context();
-  dialog(profile?'Editar perfil':'Salvar perfil',`<form id="profile-form" data-id="${profile?.id || ''}"><p>Salve as necessidades para reutilizar em outros materiais.</p><label>Nome do perfil<input id="profile-name" required maxlength="60" placeholder="Ex.: Tomás" value="${esc(profile?.name || '')}"></label><label>Necessidades<textarea id="profile-needs" required maxlength="3000" rows="3">${esc(values.needs || '')}</textarea></label><label>Tecnologias assistivas<input id="profile-technology" required maxlength="3000" value="${esc(values.technology || '')}"></label><label>Fonte preferida em pt <span class="optional">opcional</span><input id="profile-font" type="number" min="6" max="96" step="0.5" value="${values.min_font ?? ''}"></label><button class="primary" type="submit">Salvar perfil</button><p id="profile-feedback" role="status"></p></form>`);
+  dialog(profile?'Editar perfil':'Salvar perfil',`<form id="profile-form" data-id="${profile?.id || ''}"><p>Salve as necessidades para reutilizar em outros materiais.</p><label>Nome do perfil<input id="profile-name" required maxlength="60" placeholder="Ex.: Tomás" value="${esc(profile?.name || '')}"></label><label>Necessidades<textarea id="profile-needs" required maxlength="3000" rows="3">${esc(values.needs || '')}</textarea></label>${AccessProfile.fields(values.access_preferences,values.technology)}<label>Fonte preferida em pt <span class="optional">opcional</span><input id="profile-font" type="number" min="6" max="96" step="0.5" value="${values.min_font ?? ''}"></label><button class="primary" type="submit">Salvar perfil</button><p id="profile-feedback" role="status"></p></form>`);
   $('profile-name').focus();
 }
 $('profile-save').addEventListener('click',()=>profileEditor());
@@ -260,8 +261,8 @@ $('dialog-body').addEventListener('submit',async event=>{
   if(event.target.id==='profile-form'){
     event.preventDefault();const button=event.target.querySelector('[type=submit]');button.disabled=true;
     try{
-      const profile=await api('/api/profiles/save',{id:event.target.dataset.id || undefined,name:$('profile-name').value,needs:$('profile-needs').value,technology:$('profile-technology').value,min_font:$('profile-font').value});
-      await reloadWorkspace();$('profile-select').value=profile.id;$('dialog').close();announce('Perfil salvo.');
+      const profile=await api('/api/profiles/save',{id:event.target.dataset.id || undefined,name:$('profile-name').value,needs:$('profile-needs').value,technology:AccessProfile.summary(event.target),min_font:$('profile-font').value,access_preferences:AccessProfile.read(event.target)});
+      await reloadWorkspace();$('profile-select').value=profile.id;$('profile-select').dispatchEvent(new Event('change'));$('dialog').close();announce('Perfil salvo.');
     }catch(error){$('profile-feedback').textContent=error.message;}finally{button.disabled=false;}
   }
   if(event.target.id==='auth-form'){

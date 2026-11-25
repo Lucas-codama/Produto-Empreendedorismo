@@ -51,6 +51,10 @@ As fontes Fredoka e Nunito e os módulos Three.js ficam em `static/assets`. As l
 
 ## Ajustes rápidos por recurso de acesso
 
+Os novos perfis têm escolhas explícitas de leitura visual ampliada, leitor de tela com voz e linha Braille, inclusive combinadas, além dos recursos utilizados e das preferências de ampliação de imagens e legenda visível. Essas escolhas prevalecem sobre palavras presentes nos campos livres. “Ainda não sei” mantém a necessidade de confirmação com o estudante. Perfis antigos continuam disponíveis; ao reutilizá-los, confirme as novas opções.
+
+A análise prioriza os apontamentos conforme a forma de leitura, sem ocultar os demais. As preferências preenchem o editor de imagens e são preservadas nos perfis e nas novas versões. O resultado também oferece orientações de teste com os recursos selecionados. Selecionar NVDA, ZoomText ou linha Braille não executa essas ferramentas nem comprova compatibilidade: a conferência deve ocorrer no aplicativo e no equipamento utilizados pelo estudante. Não há transcrição Braille automática.
+
 O formulário de necessidades e tecnologias orienta as opções: leitor de tela prioriza descrição alternativa; leitura ampliada oferece ampliação da imagem e legenda visível; uso combinado oferece os dois. Isso não é um diagnóstico nem um teste da tecnologia assistiva. A imagem é preservada.
 
 Word: imagens em linha podem ser ampliadas e receber legenda. PowerPoint: ampliação e legenda são permitidas quando cabem sem cobrir outros elementos. PDF: a descrição alternativa é gravada na tag da figura quando identificada; a imagem é ajustada na própria página, com descrição e legenda próximas ao conteúdo, sem acrescentar páginas. Ajustes de layout complexos devem ser feitos no editor original.

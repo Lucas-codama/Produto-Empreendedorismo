@@ -81,13 +81,15 @@ async function completeAnalysis(next){
     document.removeEventListener('entrelinhas-motion',stop);document.removeEventListener('visibilitychange',stop);motionPreference.removeEventListener('change',stop);
   }
 }
+AccessProfile.write($('access-profile'));
 function context() {
   return {discipline:$('discipline').value.trim(), activity:$('activity').value,
-    needs:$('needs').value.trim(), technology:$('technology').value.trim(), min_font:$('min-font').value || null};
+    needs:$('needs').value.trim(), technology:AccessProfile.summary($('access-profile')), min_font:$('min-font').value || null, access_preferences:AccessProfile.read($('access-profile'))};
 }
 function setContext(c) {
   $('discipline').value=c.discipline; $('activity').value=c.activity;
-  $('needs').value=c.needs; $('technology').value=c.technology; $('min-font').value=c.min_font ?? '';
+  AccessProfile.write($('access-profile'),c.access_preferences,c.technology);
+  $('needs').value=c.needs; $('min-font').value=c.min_font ?? '';
 }
 function chooseFile(candidate) {
   if (!candidate) return;
@@ -201,6 +203,9 @@ async function showJobContent(next, focus=true) {
   $('download-material').textContent='Baixar documento · v'+job.version;
   $('result-context').textContent=`${a.context.discipline} · ${a.context.activity} · Versão ${job.version}`;
   $('access-focus').textContent=a.access_context?'Ajustes para: '+a.access_context.label:'';
+  const access=a.access_context || {};
+  $('access-plan').hidden=!access.checks?.length;
+  $('access-plan-body').innerHTML=(access.checks || []).map(check=>`<p><strong>${esc(check.tool)}</strong><br>${esc(check.text)}</p>`).join('')+'<p class="muted">Estes testes são feitos com o recurso do estudante. A análise do site não confirma a compatibilidade com ele.</p>';
   $('upload-revision').hidden=job.review?.status==='completed';
   render(); recent();
   announce(resolved.size?`Revisão carregada. ${a.issues.length-resolved.size} apontamentos pendentes. ${resolved.size} ${resolved.size===1?'resolvido':'resolvidos'} por você.`:`Análise concluída. ${a.counts.attention} ${a.counts.attention===1?'ponto':'pontos'} de atenção e ${a.counts.review} ${a.counts.review===1?'item':'itens'} para revisão.`);
@@ -357,7 +362,7 @@ function quickImageForm(issue,index){
   const aiUsage=job.ai_checks?.[issue.block_id] || {used:0,remaining:2};
   const description=aiUsage.result?aiUsage.description:block?.alt || block?.caption || '';
   const previousAI=aiUsage.result && aiUsage.description===description?aiUsage.result:null;
-  return `<form class="quick-image-form" data-index="${index}" data-alt-supported="true"><h4>Editar imagem</h4><label>Descrição da imagem<textarea name="description" rows="4" maxlength="3000" placeholder="O que o aluno precisa saber sobre esta imagem?">${esc(description)}</textarea></label><div class="image-ai-tools"><button type="button" class="secondary" data-ai-check ${aiUsage.remaining===0?'disabled':''}>${aiUsage.remaining===0?'Descrição já aprovada':'Verificar com IA'}</button><div class="image-ai-result" role="status" ${previousAI?'':'hidden'}>${previousAI?imageAIResultHTML(previousAI):''}</div></div><label>Ampliação<select name="scale"><option value="1">Manter tamanho</option><option value="1.25">Aumentar 25%</option><option value="1.5">Aumentar 50%</option><option value="2">Aumentar 100%</option></select></label><label class="quick-caption-check"><input type="checkbox" name="visible" ${access.magnification || block?.caption?'checked':''}>Mostrar a descrição como legenda</label><button class="primary" type="submit">Salvar imagem e verificar</button><p class="quick-image-feedback" role="status"></p></form>`;
+  return `<form class="quick-image-form" data-index="${index}" data-alt-supported="true"><h4>Editar imagem</h4><label>Descrição da imagem<textarea name="description" rows="4" maxlength="3000" placeholder="O que o aluno precisa saber sobre esta imagem?">${esc(description)}</textarea></label><div class="image-ai-tools"><button type="button" class="secondary" data-ai-check ${aiUsage.remaining===0?'disabled':''}>${aiUsage.remaining===0?'Descrição já aprovada':'Verificar com IA'}</button><div class="image-ai-result" role="status" ${previousAI?'':'hidden'}>${previousAI?imageAIResultHTML(previousAI):''}</div></div><label>Ampliação<select name="scale">${[1,1.25,1.5,2].map(scale=>`<option value="${scale}" ${scale===(access.image_scale || 1)?'selected':''}>${scale===1?'Manter tamanho':`Aumentar ${Math.round((scale-1)*100)}%`}</option>`).join('')}</select></label><label class="quick-caption-check"><input type="checkbox" name="visible" ${(block?.caption || (access.visible_caption ?? access.magnification))?'checked':''}>Mostrar a descrição como legenda</label><button class="primary" type="submit">Salvar imagem e verificar</button><p class="quick-image-feedback" role="status"></p></form>`;
 }
 function contrastRatio(first,second){
   const luminance=color=>{const c=[1,3,5].map(index=>parseInt(color.slice(index,index+2),16)/255).map(value=>value<=.04045?value/12.92:((value+.055)/1.055)**2.4);return .2126*c[0]+.7152*c[1]+.0722*c[2];};

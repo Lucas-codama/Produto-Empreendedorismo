@@ -4,6 +4,7 @@ import math
 from pathlib import Path
 import threading
 import uuid
+import access_context
 from analyzer import MaterialError
 
 LOCK = threading.RLock()
@@ -47,6 +48,9 @@ def save_profile(folder, body):
     if font is not None and (not math.isfinite(font) or not 6 <= font <= 96):
         raise MaterialError('A fonte preferida deve ficar entre 6 e 96 pt.')
     profile['min_font'] = font
+    if 'access_preferences' in body:
+        try:profile['access_preferences']=access_context.validate_preferences(body['access_preferences'])
+        except ValueError as error:raise MaterialError(str(error)) from error
     with LOCK:
         state = read(folder)
         identity = body.get('id')

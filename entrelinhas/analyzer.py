@@ -26,7 +26,7 @@ from pdf_structure import inspect as inspect_pdf_structure
 
 SUPPORTED = {'.pdf', '.docx', '.pptx', '.png', '.jpg', '.jpeg'}
 MAX_BYTES = 20 * 1024 * 1024
-ENGINE_VERSION = 18
+ENGINE_VERSION = 19
 NS = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
       'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'}
 
@@ -51,6 +51,11 @@ def threshold(size, bold):
 
 
 def validate_context(context):
+    if not isinstance(context,dict):
+        raise MaterialError('Informe o contexto do material.')
+    if 'access_preferences' in context:
+        try:context['access_preferences']=access_context.validate_preferences(context['access_preferences'])
+        except ValueError as error:raise MaterialError(str(error)) from error
     for key, label in [('discipline', 'disciplina'), ('activity', 'tipo de atividade'),
                        ('needs', 'necessidades do estudante'), ('technology', 'tecnologias assistivas')]:
         if not isinstance(context.get(key), str) or not context[key].strip():
@@ -822,6 +827,7 @@ def analyze(path, context):
                 if issue['rule'] in {'alt_missing','alt_placeholder','image_review','pdf_figure_alt'}:
                     issue['title']='Descrição e legenda da imagem'
                 elif issue['rule']=='alt_quality':issue['title']='Conferir descrição e legenda da imagem'
+    access_context.personalize(issues,access)
     checks = [
         {'name': 'Contraste de texto', 'detail': f"{measured['contrast']} trechos medidos, sendo {measured['estimated_contrast']} por imagem renderizada; {measured['unknown_contrast']} sem cálculo confiável.", 'state': 'partial' if measured['estimated_contrast'] or measured['unknown_contrast'] or not measured['contrast'] else 'checked'},
         {'name': 'Tamanho da fonte', 'detail': f"Preferência: {minimum:g} pt. {measured['font']} blocos medidos." if minimum else 'Informe uma preferência do estudante para comparar os tamanhos.', 'state': 'partial' if not minimum or measured['unknown_font'] or not measured['font'] else 'checked'},
