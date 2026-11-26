@@ -59,6 +59,10 @@ O formulário de necessidades e tecnologias orienta as opções: leitor de tela 
 
 Word: imagens em linha podem ser ampliadas e receber legenda. PowerPoint: ampliação e legenda são permitidas quando cabem sem cobrir outros elementos. PDF: a descrição alternativa é gravada na tag da figura quando identificada; a imagem é ajustada na própria página, com descrição e legenda próximas ao conteúdo, sem acrescentar páginas. Ajustes de layout complexos devem ser feitos no editor original.
 
+Ao salvar imagens em PDF, a figura recebe também os limites de posição usados pelo leitor de PDF do Firefox para expor a imagem e sua descrição às tecnologias assistivas. Salvar novamente uma descrição antiga repara esses limites quando ausentes. Ajustes posteriores de fonte e cor mantêm essa associação e atualizam a posição quando a imagem se desloca. Isso não substitui o teste com o leitor de tela utilizado pelo estudante.
+
+O download de PDF também corrige esses limites automaticamente nas versões antigas, inclusive nas revisões concluídas. Essa preparação ocorre na rota de download do produto; os arquivos originais e os registros do histórico são preservados.
+
 As alterações geram uma nova versão no formato do arquivo para download. O editor de versões de leitura HTML foi retirado.
 
 ## Verificação de descrição com IA (local)

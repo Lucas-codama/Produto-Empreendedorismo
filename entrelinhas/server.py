@@ -120,6 +120,17 @@ def file_path(job):
     return job_path(job['id']) / ('material' + job['extension'])
 
 
+@lru_cache(maxsize=4)
+def exported_pdf(path,modified):
+    """Repair image access metadata in the download, preserving the stored original."""
+    from pdf_image_edit import sync_figure_bounds
+    with tempfile.TemporaryDirectory(prefix='entrelinhas-pdf-export-') as folder:
+        copy=Path(folder)/'material.pdf'
+        copy.write_bytes(Path(path).read_bytes())
+        sync_figure_bounds(copy)
+        return copy.read_bytes()
+
+
 def review_image_descriptions(job,allow_network=False):
     """Resolve descriptions confirmed by vision; leave uncertainty for human review."""
     confirmed=set();started=time.monotonic()
@@ -264,7 +275,8 @@ def adjust_image_job(job,issue,value):
         if block is None:raise MaterialError('Imagem não encontrada.')
         if (isinstance(value,dict) and not set(value)-{'alt','caption','scale'} and value.get('scale',1)==1
             and value.get('alt',block.get('alt') or '')==(block.get('alt') or '')
-            and value.get('caption','')==(block.get('caption') or '')):
+            and value.get('caption','')==(block.get('caption') or '')
+            and not image_quick_edit.needs_description_repair(file_path(job),block)):
             return {**job,'unchanged':True}
         with tempfile.TemporaryDirectory(dir=DATA.parent,prefix='image-edit-') as folder:
             destination=Path(folder)/('material'+job['extension'])
@@ -379,7 +391,9 @@ class Handler(BaseHTTPRequestHandler):
                 if suffix in {'file', 'original'}:
                     material = load_job(job['root_id']) if suffix == 'original' else job
                     name = ('Material_v'+str(material['version'])+'_') + material['filename'] if suffix == 'file' else material['filename']
-                    return self.send(file_path(material).read_bytes(), content_type='application/octet-stream',
+                    path=file_path(material)
+                    content=exported_pdf(str(path),path.stat().st_mtime_ns) if suffix=='file' and material['extension']=='.pdf' else path.read_bytes()
+                    return self.send(content, content_type='application/octet-stream',
                                      disposition="attachment; filename*=UTF-8''"+quote(name))
                 index = int(suffix.split('/')[1])
                 if not 0 <= index < len(job['analysis']['pages']) or job['extension'] != '.pdf':

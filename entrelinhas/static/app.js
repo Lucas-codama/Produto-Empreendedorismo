@@ -608,13 +608,19 @@ $('review-panel').addEventListener('submit',async event=>{
   if(values.visible && description)value.caption=description;
   if(value.scale===1 && !value.alt && !value.caption){feedback.textContent='Escreva a descrição ou escolha uma ampliação.';return;}
   prepareReviewSound();const previousResolved=[...resolved];button.disabled=true;feedback.textContent='Salvando…';
+  const download=$('download-material'),previousDownload=download.getAttribute('href');
+  download.removeAttribute('href');download.setAttribute('aria-disabled','true');
   try{await flushProgress();const next=await api('/api/image-adjust',{id:identity,issue_id:issue.id,value});if(job?.id===identity){
     const completed=await acceptEditedJob(next,previousResolved,issue);
     if(completed)celebrateReview(job.analysis.issues.some(i=>!resolved.has(i.id))?'Imagem atualizada!':'Revisão concluída!');
     else{const text=next.unchanged?'Esta descrição já está salva. Confira o conteúdo e marque como resolvido quando estiver correto.':'Descrição salva. Confira o conteúdo ou verifique com IA; depois marque como resolvido quando estiver correto.';const currentFeedback=document.querySelector('.quick-image-feedback');if(currentFeedback)currentFeedback.textContent=text;announce(text);}
   }}
   catch(error){if(feedback.isConnected)feedback.textContent=error.message;}
-  finally{button.disabled=false;}
+  finally{
+    button.disabled=false;
+    if(!download.getAttribute('href') && previousDownload && job?.id===identity)download.setAttribute('href',previousDownload);
+    download.removeAttribute('aria-disabled');
+  }
 });
 $('review-panel').addEventListener('input',event=>{
   if(!event.target.matches('[data-contrast-color]'))return;

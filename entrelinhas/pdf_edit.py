@@ -50,6 +50,8 @@ def recolor(source,destination,issue,color):
                 document.save(str(destination))
             finally:page.close()
         finally:document.close()
+    from pdf_image_edit import sync_figure_bounds
+    sync_figure_bounds(destination)
 
 
 def resize(source,destination,issue,size):
@@ -68,6 +70,8 @@ def resize(source,destination,issue,size):
                 page.gen_content();document.save(str(destination))
             finally:page.close()
         finally:document.close()
+    from pdf_image_edit import sync_figure_bounds
+    sync_figure_bounds(destination)
 
 
 def resize_line(page,objects,issue,size):
@@ -200,3 +204,5 @@ def structure_edit(source,destination,issue,value):
             if not count:raise MaterialError('Não foram encontradas células para marcar como cabeçalho.')
         else:raise MaterialError('Operação de estrutura inválida.')
     writer.write(destination)
+    from pdf_image_edit import sync_figure_bounds
+    sync_figure_bounds(destination)

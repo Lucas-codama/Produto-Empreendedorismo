@@ -1,5 +1,6 @@
 """Edit one identified PDF image occurrence and its caption on the original page."""
 from io import BytesIO
+from pathlib import Path
 import uuid
 from pypdf import PdfReader, PdfWriter
 from pypdf.generic import (ArrayObject, BooleanObject, ContentStream, DictionaryObject,
@@ -30,9 +31,81 @@ def image_target(page,stream,block):
 
 
 def structure_node(writer,path):
-    node=writer.root_object['/StructTreeRoot'].get_object()
+    root=writer.root_object if hasattr(writer,'root_object') else writer.trailer['/Root']
+    node=root['/StructTreeRoot'].get_object()
     for part in path:node=node[part if isinstance(part,int) else '/'+part].get_object()
     return node
+
+
+def figure_bounds(figure):
+    attributes=figure.get('/A')
+    attributes=attributes.get_object() if attributes is not None else None
+    items=attributes if isinstance(attributes,list) else [attributes]
+    result=None
+    for item in items:
+        item=item.get_object() if hasattr(item,'get_object') else item
+        if isinstance(item,dict) and item.get('/O')=='/Layout':
+            box=item.get('/BBox')
+            if isinstance(box,(list,ArrayObject)) and len(box)==4:
+                try:result=[float(v) for v in box]
+                except (ValueError,TypeError):pass
+    return result
+
+
+def set_figure_bounds(figure,box):
+    """Give PDF viewers a positioned accessibility image, without changing pixels."""
+    current=figure_bounds(figure)
+    if current is not None and all(abs(a-b)<.01 for a,b in zip(current,box)):return False
+    attributes=figure.get('/A')
+    resolved=attributes.get_object() if attributes is not None else None
+    items=list(resolved) if isinstance(resolved,list) else [attributes] if attributes is not None else []
+    index=None
+    for i,item in enumerate(items):
+        item=item.get_object() if hasattr(item,'get_object') else item
+        if isinstance(item,dict) and item.get('/O')=='/Layout':index=i
+    layout=DictionaryObject(items[index].get_object()) if index is not None else DictionaryObject()
+    layout[NameObject('/O')]=NameObject('/Layout')
+    layout[NameObject('/BBox')]=ArrayObject([FloatObject(v) for v in box])
+    if index is None:items.append(layout)
+    else:items[index]=layout
+    figure[NameObject('/A')]=items[0] if len(items)==1 else ArrayObject(items)
+    return True
+
+
+def needs_description_repair(source,block):
+    if not block.get('alt'):return False
+    ref=block.get('source') or {}
+    if not ref.get('pdf_path'):return True
+    try:
+        reader=PdfReader(str(source));page=reader.pages[ref['pdf_page']]
+        box=figure_bounds(structure_node(reader,ref['pdf_path']))
+        expected=(block['x'],float(page.mediabox.height)-block['y']-block['h'],
+                  block['x']+block['w'],float(page.mediabox.height)-block['y'])
+        return box is None or not all(abs(a-b)<2 for a,b in zip(box,expected))
+    except (KeyError,IndexError,ValueError,TypeError):return True
+
+
+def sync_figure_bounds(path):
+    """Keep image access bounds aligned after text edits move page objects."""
+    import pdfplumber
+    import pdf_structure
+    reader=PdfReader(str(path));figures=pdf_structure.inspect(reader)['figures']
+    if not figures:return
+    bounds={}
+    with pdfplumber.open(path) as document:
+        for page_index,page in enumerate(document.pages):
+            for image in page.images:
+                key=(page_index,image.get('mcid'))
+                if key not in figures:continue
+                box=[float(image[k]) for k in ('x0','y0','x1','y1')]
+                previous=bounds.get(key,box)
+                bounds[key]=[min(previous[0],box[0]),min(previous[1],box[1]),
+                             max(previous[2],box[2]),max(previous[3],box[3])]
+    writer=PdfWriter(clone_from=str(path));changed=False
+    for key,box in bounds.items():
+        changed=set_figure_bounds(structure_node(writer,figures[key]['path']),box) or changed
+    if changed:
+        output=BytesIO();writer.write(output);Path(path).write_bytes(output.getvalue())
 
 
 def number_entries(node,result=None):
@@ -140,7 +213,9 @@ def edit(source,destination,block,alt,caption,scale):
     if figure is None and alt is not None:
         try:figure,mcid=add_figure(writer,page,stream,alt.strip())
         except (KeyError,ValueError,TypeError):raise MaterialError('Não foi possível associar a descrição à imagem deste PDF.')
-    if figure is not None and alt is not None:figure[NameObject('/Alt')]=TextStringObject(alt.strip())
+    if figure is not None:
+        if alt is not None:figure[NameObject('/Alt')]=TextStringObject(alt.strip())
+        set_figure_bounds(figure,(x,height-y-h,x+w,height-y))
     pos,matrix=target;args,op=stream.operations[pos]
     replacement=[([],b'q'),([FloatObject(scale),NumberObject(0),NumberObject(0),FloatObject(scale),NumberObject(0),FloatObject(1-scale)],b'cm')]
     if mcid is not None:replacement.append(([NameObject('/Figure'),DictionaryObject({NameObject('/MCID'):NumberObject(mcid)})],b'BDC'))

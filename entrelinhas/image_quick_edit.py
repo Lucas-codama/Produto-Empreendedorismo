@@ -5,6 +5,11 @@ import zipfile
 from lxml import etree as ET
 from analyzer import MaterialError
 
+def needs_description_repair(source,block):
+    if source.suffix.lower()!='.pdf':return False
+    from pdf_image_edit import needs_description_repair as check
+    return check(source,block)
+
 def apply(source,destination,block,value):
     if not isinstance(value,dict) or set(value)-{'alt','caption','scale'}:raise MaterialError('Confira os ajustes da imagem.')
     alt=value.get('alt');caption=value.get('caption','')
