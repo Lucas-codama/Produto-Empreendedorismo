@@ -30,11 +30,20 @@ import image_quick_edit
 import workspace_store
 import image_ai
 import review_store
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 from vision_checks import PDF_LOCK
 
 ROOT = Path(__file__).resolve().parent
-load_dotenv(ROOT/'.env',override=False)
+
+def load_app_environment(path):
+    load_dotenv(path,override=False)
+    if not os.environ.get('RENDER'):
+        local=dotenv_values(path)
+        for name in ('OPENROUTER_API_KEY','OPENROUTER_MODEL'):
+            if local.get(name) is not None:
+                os.environ[name]=local[name]
+
+load_app_environment(ROOT/'.env')
 STATIC = ROOT / 'static'
 DATA = ROOT / '.runtime' / 'jobs'
 RENDER_LOCK = PDF_LOCK
@@ -101,7 +110,7 @@ def load_job(identity):
                     state['progress'][identity]['resolved']=sorted(set(saved.get('resolved',[])) | automatic)
                     workspace_store.write(workspace_path(),state);saved=state['progress'][identity]
                 temporary=target.with_suffix('.new');temporary.write_text(json.dumps(job,ensure_ascii=False),encoding='utf-8');temporary.replace(target)
-            job['review']=review_store.sync(workspace_path(),job,set(saved.get('resolved',job.get('resolved_issues',[]))) | automatic)
+            job['review']=review_store.sync(workspace_path(),job,set(saved.get('resolved',[])) | set(job.get('resolved_issues',[])) | automatic)
             return job
     except FileNotFoundError:
         raise MaterialError('Essa análise não está mais disponível neste computador.')
@@ -116,6 +125,9 @@ def review_image_descriptions(job,allow_network=False):
     confirmed=set();started=time.monotonic()
     for issue in job['analysis']['issues']:
         if issue['rule']!='alt_quality' or issue.get('page') is None:continue
+        if issue['id'] in job.get('resolved_issues',[]):
+            if issue['id'] in job.get('ai_confirmed_issues',[]):confirmed.add(issue['id'])
+            continue
         block=next((b for b in job['analysis']['pages'][issue['page']]['blocks'] if b['id']==issue['block_id']),None)
         if not block or not block.get('image') or not block.get('alt') or image_ai.is_placeholder(block['alt']):continue
         state=review_store.ai_status(workspace_path(),image_ai.approval_key(block['image'],block['alt']))
@@ -187,7 +199,7 @@ def _create_job(content, filename, context, previous=None, edits=None, is_exampl
                'is_example': workspace_store.is_example(previous) if previous else is_example}
         if previous and edits:
             saved=workspace_store.read(workspace_path()).get('progress',{}).get(previous['id'],{})
-            prior=saved.get('resolved',previous.get('resolved_issues',[]))
+            prior=set(saved.get('resolved',[])) | set(previous.get('resolved_issues',[]))
             existing={i['id'] for i in result['issues']}
             resolved={identity for identity in prior if identity in existing}
             for edit in edits:
@@ -195,7 +207,8 @@ def _create_job(content, filename, context, previous=None, edits=None, is_exampl
                     resolved.difference_update(i['id'] for i in result['issues'] if i['rule']=='alt_quality'
                         and i['page']==edit.get('page') and i['block_id']==edit.get('block_id'))
             job['resolved_issues']=sorted(resolved)
-            job['edited_issue_ids']=[]
+            job['edited_issue_ids']=sorted(set(previous.get('edited_issue_ids',[])) & resolved)
+            job['ai_confirmed_issues']=sorted(set(previous.get('ai_confirmed_issues',[])) & resolved)
         review_image_descriptions(job,allow_network=True)
         job['ai_checks']=image_ai.usage_status(folder/'ai_checks.json',workspace_path())
         (folder / 'analysis.json').write_text(json.dumps(job, ensure_ascii=False), encoding='utf-8')
@@ -218,6 +231,12 @@ def _edit_job(job, requests):
     issues = {i['id']: i for i in job['analysis']['issues']}
     if not requests or len(requests) > 100:
         raise MaterialError('Selecione de 1 a 100 ajustes por vez.')
+    if job['extension']=='.pdf':
+        # Enlarging text can move content below it. Edit from the bottom up so
+        # the coordinates of subsequent requested adjustments remain valid.
+        requests=sorted(requests,key=lambda r:(-(issues.get(r.get('issue_id'),{}).get('page') or 0),
+            -(issues.get(r.get('issue_id'),{}).get('pdf_box') or [0,0])[1],
+            issues.get(r.get('issue_id'),{}).get('action')=='font'))
     with tempfile.TemporaryDirectory(dir=DATA.parent, prefix='edits-') as folder:
         current = file_path(job)
         edits = []
@@ -236,6 +255,26 @@ def _edit_job(job, requests):
                           'page':issue['page'],'block_id':issue['block_id'],'description_saved':issue['action']=='alt',
                           'note': 'Conferir o resultado, o espaço disponível e a finalidade da atividade.'})
         return create_job(current.read_bytes(), job['filename'], dict(job['analysis']['context']), job, edits)
+
+
+def adjust_image_job(job,issue,value):
+    with JOB_LOCK:
+        require_editable(job)
+        block=next((b for b in job['analysis']['pages'][issue['page']]['blocks'] if b['id']==issue['block_id']),None)
+        if block is None:raise MaterialError('Imagem não encontrada.')
+        if (isinstance(value,dict) and not set(value)-{'alt','caption','scale'} and value.get('scale',1)==1
+            and value.get('alt',block.get('alt') or '')==(block.get('alt') or '')
+            and value.get('caption','')==(block.get('caption') or '')):
+            return {**job,'unchanged':True}
+        with tempfile.TemporaryDirectory(dir=DATA.parent,prefix='image-edit-') as folder:
+            destination=Path(folder)/('material'+job['extension'])
+            image_quick_edit.apply(file_path(job),destination,block,value)
+            return create_job(destination.read_bytes(),job['filename'],dict(job['analysis']['context']),job,
+                [{'title':'Ajuste rápido de imagem','location':issue['location'],'action':'image',
+                  'page':issue['page'],'block_id':issue['block_id'],
+                  'description_saved':value.get('alt',block.get('alt'))!=block.get('alt'),
+                  'before':block.get('alt') or '', 'value':value,
+                  'note':'Confira a imagem e a legenda na nova versão.'}])
 
 
 def report(job):
@@ -471,17 +510,7 @@ class Handler(BaseHTTPRequestHandler):
                 require_editable(job)
                 issue=next((i for i in job['analysis']['issues'] if i['id']==body.get('issue_id')),None)
                 if not issue or not issue.get('quick_image'):raise MaterialError('Escolha uma imagem com ajustes rápidos disponíveis.')
-                block=next((b for b in job['analysis']['pages'][issue['page']]['blocks'] if b['id']==issue['block_id']),None)
-                if block is None:raise MaterialError('Imagem não encontrada.')
-                with JOB_LOCK,tempfile.TemporaryDirectory(dir=DATA.parent,prefix='image-edit-') as folder:
-                    destination=Path(folder)/('material'+job['extension'])
-                    image_quick_edit.apply(file_path(job),destination,block,body.get('value'))
-                    updated=create_job(destination.read_bytes(),job['filename'],dict(job['analysis']['context']),job,
-                        [{'title':'Ajuste rápido de imagem','location':issue['location'],'action':'image',
-                          'page':issue['page'],'block_id':issue['block_id'],'description_saved':bool((body.get('value') or {}).get('alt')),
-                          'before':block.get('alt') or '', 'value':body.get('value'),
-                          'note':'Confira a imagem e a legenda na nova versão.'}])
-                return self.send(updated)
+                return self.send(adjust_image_job(job,issue,body.get('value')))
             if path in {'/api/edit', '/api/assist'}:
                 job = load_job(body.get('id'))
                 if path == '/api/edit':

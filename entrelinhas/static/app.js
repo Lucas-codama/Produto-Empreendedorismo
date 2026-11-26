@@ -483,19 +483,23 @@ async function acceptEditedJob(next,previousResolved,previousIssue){
   const scroll=window.scrollY;
   await showJob(next,false);
   reviewFilters.status='all';
-  const stillPending=previousIssue && next.analysis.issues.some(issue=>issue.rule===previousIssue.rule && issue.page===previousIssue.page && issue.block_id===previousIssue.block_id && !resolved.has(issue.id));
+  const counterpart=next.analysis.issues.findIndex(issue=>ReviewRules.sameTarget(previousIssue,issue));
+  const stillPending=counterpart>=0 && !resolved.has(next.analysis.issues[counterpart].id);
   resolvedNotice=previousIssue && !stillPending?{title:previousIssue.title,location:previousIssue.location,manual:false}:null;
-  selected=previousIssue?next.analysis.issues.findIndex(issue=>issue.id===previousIssue.id):-1;
+  selected=counterpart;
   if(selected<0)selected=visibleIssueIndexes()[0] ?? -1;
   if(selected>=0 && job.analysis.issues[selected].page!==null)currentPage=job.analysis.issues[selected].page;
   render();window.scrollTo({top:scroll,behavior:'instant'});
   (document.querySelector('.resolved-notice h3,.issue-detail h3,.review-complete') || $('result-title')).focus({preventScroll:true});
+  return !stillPending;
 }
 async function correction(index,value) {
   const issue=job.analysis.issues[index],identity=job.id,previousResolved=[...resolved];prepareReviewSound();
+  let completed=false;
   if ($('dialog').open) $('dialog').close();
-  const updated=await run(async()=>{await flushProgress();const next=await api('/api/edit',{id:identity,issue_id:issue.id,value});if(job?.id!==identity)return null;await acceptEditedJob(next,previousResolved,issue);return next;}, 'Salvando a alteração e verificando a nova versão');
-  if(updated)celebrateReview(visibleIssueIndexes().length?'Alteração salva!':'Revisão concluída!');
+  const updated=await run(async()=>{await flushProgress();const next=await api('/api/edit',{id:identity,issue_id:issue.id,value});if(job?.id!==identity)return null;completed=await acceptEditedJob(next,previousResolved,issue);return next;}, 'Salvando a alteração e verificando a nova versão');
+  if(updated && completed)celebrateReview(job.analysis.issues.some(i=>!resolved.has(i.id))?'Alteração salva!':'Revisão concluída!');
+  else if(updated)message('A alteração foi salva, mas este ponto ainda precisa de ajuste. Confira o valor informado.');
 }
 
 $('file-input').addEventListener('change',e=>chooseFile(e.target.files[0]));
@@ -604,7 +608,11 @@ $('review-panel').addEventListener('submit',async event=>{
   if(values.visible && description)value.caption=description;
   if(value.scale===1 && !value.alt && !value.caption){feedback.textContent='Escreva a descrição ou escolha uma ampliação.';return;}
   prepareReviewSound();const previousResolved=[...resolved];button.disabled=true;feedback.textContent='Salvando…';
-  try{await flushProgress();const next=await api('/api/image-adjust',{id:identity,issue_id:issue.id,value});if(job?.id===identity){await acceptEditedJob(next,previousResolved,issue);celebrateReview(visibleIssueIndexes().length?'Imagem atualizada!':'Revisão concluída!');}}
+  try{await flushProgress();const next=await api('/api/image-adjust',{id:identity,issue_id:issue.id,value});if(job?.id===identity){
+    const completed=await acceptEditedJob(next,previousResolved,issue);
+    if(completed)celebrateReview(job.analysis.issues.some(i=>!resolved.has(i.id))?'Imagem atualizada!':'Revisão concluída!');
+    else{const text=next.unchanged?'Esta descrição já está salva. Confira o conteúdo e marque como resolvido quando estiver correto.':'Descrição salva. Confira o conteúdo ou verifique com IA; depois marque como resolvido quando estiver correto.';const currentFeedback=document.querySelector('.quick-image-feedback');if(currentFeedback)currentFeedback.textContent=text;announce(text);}
+  }}
   catch(error){if(feedback.isConnected)feedback.textContent=error.message;}
   finally{button.disabled=false;}
 });

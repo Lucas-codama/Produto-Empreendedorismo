@@ -102,3 +102,11 @@ def accept_ai(folder,content_key,result):
         if count>=2:return None
         db.execute('INSERT OR REPLACE INTO ai_acceptances VALUES(?,?,?)',(content_key,count+1,json.dumps(result,ensure_ascii=False)))
         return count+1
+
+
+def remember_ai(folder,content_key,result):
+    """Cache a verified suggestion without consuming or resetting user approvals."""
+    with closing(database(folder)) as db,db:
+        db.execute('INSERT INTO ai_acceptances VALUES(?,0,?) '
+            'ON CONFLICT(content_key) DO UPDATE SET result=excluded.result',
+            (content_key,json.dumps(result,ensure_ascii=False)))

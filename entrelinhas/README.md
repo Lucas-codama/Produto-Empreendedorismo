@@ -65,6 +65,8 @@ As alterações geram uma nova versão no formato do arquivo para download. O ed
 
 Preencha `OPENROUTER_API_KEY` no arquivo `.env` da raiz (há um modelo em `.env.example`). Reinicie com `Parar.ps1` e `Iniciar.ps1`. A chave fica no backend local, não é enviada ao navegador e está ignorada pelo Git. A integração não funciona em acessos remotos nem no ambiente Render.
 
+Na execução local, `OPENROUTER_API_KEY` e `OPENROUTER_MODEL` do `.env` têm prioridade sobre valores herdados do Windows. No Render, as variáveis do servidor continuam tendo prioridade.
+
 O modelo padrão é `google/gemini-2.5-flash-lite`, pelo OpenRouter, configurável em `OPENROUTER_MODEL`. Ele aceita imagem e texto. A referência consultada é US$ 0,10 por milhão de tokens de entrada e US$ 0,40 por milhão de tokens de saída: https://openrouter.ai/google/gemini-2.5-flash-lite. O preço e a disponibilidade podem mudar.
 
 No editor da imagem, escreva a descrição e clique em **Verificar com IA**. O resultado compara o conteúdo, aponta diferenças e oferece uma descrição sugerida. É necessário escrever uma descrição antes de verificar. **Usar sugestão** só preenche o campo; **Salvar imagem e verificar** grava a alteração no documento. A IA não conclui nem certifica acessibilidade por conta própria.
@@ -77,13 +79,19 @@ A tela final oferece **Baixar nova versão**. O histórico mostra a versão mais
 
 O banco SQLite `reviews.sqlite` guarda versões, apontamentos e alterações em tabelas separadas, com transações e chaves de referência. Ele fica em `.runtime` para uso sem conta e na pasta `.runtime/accounts/<id>` para cada conta. Os arquivos originais continuam nas pastas de materiais; faça backup da pasta `.runtime` completa para preservar registros e documentos juntos. Registros antigos são incorporados ao acessar o material ou o histórico; informações de antes/depois que não foram registradas nas versões antigas não são inventadas. A limpeza reversível do histórico preserva o estado de conclusão ao recuperar os materiais.
 
-A avaliação numérica da IA é interna e não é enviada ao navegador. Uma descrição aprovada não recebe novas sugestões. O limite conta somente duas aprovações da mesma combinação de imagem e texto, com espaços e maiúsculas normalizados. A contagem fica no SQLite da conta e continua após reiniciar ou criar outra versão com a mesma imagem e descrição. Descrições que precisam de ajustes não consomem aprovações. Respostas aprovadas são reutilizadas para evitar outra chamada paga. A execução mantém somente uma chamada de IA simultânea.
+A avaliação numérica da IA vai de 0 a 1000, é interna e não é enviada ao navegador. A aprovação exige nota acima de 950 e correspondência suficiente com a imagem. Uma descrição aprovada não recebe novas sugestões. O limite conta somente duas aprovações da mesma combinação de imagem e texto, com espaços e maiúsculas normalizados. A contagem fica no SQLite da conta e continua após reiniciar ou criar outra versão com a mesma imagem e descrição. Descrições que precisam de ajustes não consomem aprovações. Respostas aprovadas são reutilizadas para evitar outra chamada paga. A execução mantém somente uma verificação de IA simultânea.
+
+Em gráficos e tabelas, citar apenas o tema não é suficiente. A IA deve extrair as categorias, os valores e as unidades visíveis e indicar trechos da descrição que comunicam esses dados. O backend confere essas evidências antes de aceitar uma aprovação; dados ausentes ou não confirmados mantêm a necessidade de ajustes. As aprovações são versionadas, para que resultados de critérios antigos não sejam reaproveitados em novas verificações.
+
+Uma sugestão só é exibida depois de passar pela mesma avaliação de imagem e texto. Essa conferência pode fazer uma segunda chamada à IA. Se a sugestão for aprovada, o resultado é guardado sem consumir as duas aprovações do usuário. Ao usar esse texto sem alterações na mesma imagem, a aprovação é reutilizada, inclusive após reiniciar o aplicativo. Não há uma sequência automática de novas sugestões se a candidata não for confirmada.
 
 A tela de conclusão inclui uma prévia ampla da versão final, seleção de páginas e ampliação antes do download. PDFs usam a imagem renderizada da própria versão final; Word e PowerPoint usam a prévia extraída já existente no aplicativo.
 
 Em **Sua conta → Editar perfil → Alterar senha**, informe a senha atual, a nova senha e sua confirmação. A nova senha precisa de 8 a 128 caracteres. A alteração renova a sessão atual e encerra as sessões anteriores; senhas continuam armazenadas apenas como hashes com salt.
 
 Descrições existentes passam por revisão automática de IA durante a análise e ao salvar uma nova versão, na execução local com chave configurada. Aprovações da mesma imagem e descrição são reutilizadas sem outra chamada ou nova aceitação. Descrições aprovadas ficam resolvidas, inclusive em reenvios; indisponibilidade ou incerteza mantém o ponto para revisão humana. Abrir o histórico só consulta aprovações já registradas.
+
+Depois de gravar uma descrição, essa conferência de conteúdo pode ser marcada manualmente como resolvida se a IA estiver indisponível. Imagens sem descrição continuam exigindo a gravação do texto antes dessa confirmação. Salvar novamente a mesma descrição, legenda e tamanho não cria uma versão duplicada. Confirmações e aprovações já registradas são preservadas ao avançar, retomar a revisão ou corrigir outro trecho.
 
 ## Configurações de acessibilidade
 

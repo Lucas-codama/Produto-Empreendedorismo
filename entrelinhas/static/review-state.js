@@ -7,7 +7,8 @@ const ReviewRules=(()=>{
     if(rule.startsWith('font'))return 'font';
     return 'structure';
   }
-  function canResolve(issue){return !issue.action && !issue.quick_image;}
+  function canResolve(issue){return issue.rule==='alt_quality' || !issue.action && !issue.quick_image;}
+  function sameTarget(first,second){return !!first && first.page===second.page && first.block_id===second.block_id && (first.rule===second.rule || first.quick_image && second.quick_image);}
   function matches(issue,filters,resolved){
     return (filters.category==='all' || category(issue)===filters.category) &&
       (filters.status==='all' || filters.status==='pending' && !resolved.has(issue.id) || filters.status==='resolved' && resolved.has(issue.id) || filters.status==='human' && issue.severity==='review' && !resolved.has(issue.id));
@@ -16,7 +17,7 @@ const ReviewRules=(()=>{
   function restore(analysis,saved){
     const filters={category:['all','contrast','images','font','structure'].includes(saved?.filters?.category)?saved.filters.category:'all',status:['all','pending','resolved','human'].includes(saved?.filters?.status)?saved.filters.status:'all'};
     const reviewed=new Set((Array.isArray(saved?.reviewed)?saved.reviewed:[]).filter(id=>analysis.issues.some(i=>i.id===id)));
-    const resolved=new Set((Array.isArray(saved?.resolved)?saved.resolved:[]).filter(id=>analysis.issues.some(i=>i.id===id && (canResolve(i) || analysis.resolved_by_edit?.includes(id)))));
+    const resolved=new Set([...(Array.isArray(saved?.resolved)?saved.resolved:[]),...(analysis.resolved_by_edit || [])].filter(id=>analysis.issues.some(i=>i.id===id && (canResolve(i) || analysis.resolved_by_edit?.includes(id)))));
     const visible=indexes(analysis.issues,filters,resolved);
     let selected=saved && Object.hasOwn(saved,'issue_id')?(saved.issue_id?analysis.issues.findIndex(i=>i.id===saved.issue_id):-1):analysis.issues.length?0:-1;
     let page=Math.max(0,Math.min(Number.isInteger(saved?.page)?saved.page:analysis.issues[selected]?.page ?? 0,analysis.pages.length-1));
@@ -25,5 +26,5 @@ const ReviewRules=(()=>{
     if(selected>=0 && analysis.issues[selected].page!==null && analysis.issues[selected].page!==page)selected=visible.find(index=>analysis.issues[index].page===page) ?? -1;
     return {mode:saved?.mode==='step'?'step':'side',page,selected,reviewed,resolved,filters};
   }
-  return {category,matches,indexes,restore,canResolve};
+  return {category,matches,indexes,restore,canResolve,sameTarget};
 })();

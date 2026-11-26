@@ -26,7 +26,7 @@ from pdf_structure import inspect as inspect_pdf_structure
 
 SUPPORTED = {'.pdf', '.docx', '.pptx', '.png', '.jpg', '.jpeg'}
 MAX_BYTES = 20 * 1024 * 1024
-ENGINE_VERSION = 19
+ENGINE_VERSION = 20
 NS = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
       'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'}
 
@@ -671,7 +671,7 @@ def analyze(path, context):
                         measured['unknown_font'] += 1; unknown_size = True
                     if sizes:
                         measured['font'] += 1
-                        if min(sizes) < minimum:
+                        if min(sizes)+.05 < minimum:
                             add('font_size', 'Fonte abaixo do tamanho informado',
                                 f'O trecho tem fonte de {min(sizes):g} pt; você informou {minimum:g} pt para este estudante.',
                                 f'Aumente para pelo menos {minimum:g} pt e confira se o texto cabe sem cortes ou sobreposições.', pi, block,

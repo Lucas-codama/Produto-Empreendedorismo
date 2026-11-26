@@ -69,13 +69,17 @@ def remove_profile(folder, identity):
         state['profiles'] = [p for p in state['profiles'] if p['id']!=identity]
         write(folder, state)
 
+def can_resolve(issue):
+    return issue.get('rule')=='alt_quality' or (not issue.get('action') and not issue.get('quick_image'))
+
+
 def save_progress(folder, job, body):
     issues = {i['id'] for i in job['analysis']['issues']}
     pages = len(job['analysis']['pages'])
     page = body.get('page', 0)
     reviewed = body.get('reviewed', [])
     resolved = body.get('resolved', [])
-    eligible = {i['id'] for i in job['analysis']['issues'] if not i.get('action') and not i.get('quick_image')} | set(job.get('resolved_issues',[]))
+    eligible = {i['id'] for i in job['analysis']['issues'] if can_resolve(i)} | set(job.get('resolved_issues',[]))
     if not isinstance(resolved,list) or len(resolved)>2000 or any(not isinstance(i,str) or i not in eligible for i in resolved):
         raise MaterialError('Resolução inválida para essa análise.')
     if isinstance(page, bool) or not isinstance(page, int) or not 0 <= page < pages:

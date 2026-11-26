@@ -1,5 +1,7 @@
 """Recolor identified top-level PDF text objects without painting over the page."""
 import re
+import ctypes
+import math
 import pypdfium2 as pdfium
 from vision_checks import PDF_LOCK
 
@@ -52,7 +54,6 @@ def recolor(source,destination,issue,color):
 
 def resize(source,destination,issue,size):
     from analyzer import MaterialError
-    import math
     try:size=float(size)
     except (TypeError,ValueError):raise MaterialError('Informe uma fonte entre 6 e 96 pt.')
     if not math.isfinite(size) or not 6<=size<=96:raise MaterialError('Informe uma fonte entre 6 e 96 pt.')
@@ -63,11 +64,88 @@ def resize(source,destination,issue,size):
             try:
                 objects=targets(page,issue['pdf_box'])
                 if not objects:raise MaterialError('Não foi possível isolar o trecho. Faça este ajuste no editor original.')
-                for obj in objects:
-                    if not pdfium.raw.FPDFTextObj_SetFontSize(obj,size):raise MaterialError('Não foi possível alterar a fonte deste objeto.')
+                resize_line(page,objects,issue,size)
                 page.gen_content();document.save(str(destination))
             finally:page.close()
         finally:document.close()
+
+
+def resize_line(page,objects,issue,size):
+    """Resize in page points and reflow existing text objects without losing their tags."""
+    from analyzer import MaterialError
+    height=page.get_height();left,top,right,bottom=issue['pdf_box']
+    selected={ctypes.cast(o.raw,ctypes.c_void_p).value for o in objects}
+    others=[(o,o.get_bounds()) for o in page.get_objects(max_depth=0)
+        if ctypes.cast(o.raw,ctypes.c_void_p).value not in selected]
+    limit=page.get_width()-min(max(left,18),36)
+    records=[]
+    textpage=page.get_textpage()
+    try:
+        for obj,(x0,y0,x1,y1) in others:
+            if x0>=right-1 and height-y1<bottom and height-y0>top:
+                if obj.type==pdfium.raw.FPDF_PAGEOBJ_TEXT:
+                    length=pdfium.raw.FPDFTextObj_GetText(obj,textpage,None,0)
+                    if length<2:continue
+                    buffer=ctypes.create_string_buffer(length)
+                    pdfium.raw.FPDFTextObj_GetText(obj,textpage,ctypes.cast(buffer,ctypes.POINTER(ctypes.c_ushort)),length)
+                    if not buffer.raw.decode('utf-16-le').rstrip('\0').strip():continue
+                limit=min(limit,x0-8)
+        for obj in objects:
+            matrix=obj.get_matrix();scale=math.hypot(matrix.c,matrix.d)
+            if scale<.001 or abs(matrix.b)>.001 or abs(matrix.c)>.001 or matrix.a<=0 or matrix.d<=0:
+                raise MaterialError('Este texto tem uma transformação que exige ajuste no editor original.')
+            current=ctypes.c_float()
+            if not pdfium.raw.FPDFTextObj_GetFontSize(obj,ctypes.byref(current)):
+                raise MaterialError('Não foi possível medir a fonte deste trecho.')
+            length=pdfium.raw.FPDFTextObj_GetText(obj,textpage,None,0)
+            if length<2:raise MaterialError('Não foi possível recuperar o texto deste trecho.')
+            buffer=ctypes.create_string_buffer(length)
+            pdfium.raw.FPDFTextObj_GetText(obj,textpage,ctypes.cast(buffer,ctypes.POINTER(ctypes.c_ushort)),length)
+            text=buffer.raw.decode('utf-16-le').rstrip('\0')
+            records.append({'object':obj,'matrix':matrix,'text':text,'buffer':buffer,'size':current.value*scale})
+    finally:textpage.close()
+    records.sort(key=lambda r:r['matrix'].e)
+    original=''.join(issue.get('text','').split())
+    if not original or ''.join(''.join(r['text'].split()) for r in records)!=original:
+        raise MaterialError('Não foi possível reorganizar este trecho com segurança. Ajuste-o no editor original.')
+    boundaries=set();length=0
+    for word in issue['text'].split():length+=len(word);boundaries.add(length)
+    groups=[];group=[];length=0
+    for record in records:
+        obj=record['object'];matrix=record['matrix']
+        if not pdfium.raw.FPDFTextObj_SetFontSize(obj,size/math.hypot(matrix.c,matrix.d)):
+            raise MaterialError('Não foi possível alterar a fonte deste objeto.')
+        # PDFium caches bounds; resetting the unchanged text recalculates glyph positions.
+        if not pdfium.raw.FPDFText_SetText(obj,ctypes.cast(record['buffer'],ctypes.POINTER(ctypes.c_ushort))):
+            raise MaterialError('Não foi possível atualizar a posição do texto.')
+        record['advance']=max(.05,obj.get_bounds()[2]-matrix.e)
+        group.append(record);length+=len(''.join(record['text'].split()))
+        if length in boundaries:groups.append(group);group=[]
+    if group:groups.append(group)
+    cursor=left;line=0;placements=[];spacing=size*.28;fragment_gap=size*.035
+    for group in groups:
+        width=sum(r['advance'] for r in group)+fragment_gap*max(0,len(group)-1)
+        if width>limit-left+.05:
+            raise MaterialError('A fonte escolhida não cabe neste trecho sem reorganizar o conteúdo. Faça esse ajuste no editor original.')
+        if cursor>left and cursor+width>limit:
+            line+=1;cursor=left
+        for record in group:
+            placements.append((record,cursor,line));cursor+=record['advance']+fragment_gap
+        cursor+=spacing-fragment_gap
+    new_height=size+line*size*1.25
+    shift=max(0,new_height-(bottom-top))
+    downstream=[o for o,b in others if height-b[3]>=bottom-.2 and b[2]>left and b[0]<limit]
+    if top+new_height>height-18 or any(height-o.get_bounds()[1]+shift>height-18 for o in downstream):
+        raise MaterialError('A fonte escolhida ultrapassaria o fim da página. Reorganize o material no editor original.')
+    first=records[0]
+    ascent=max(.5,min(1.5,(height-top-first['matrix'].f)/first['size']))
+    baseline=height-top-size*ascent
+    for record,x,row in placements:
+        matrix=record['matrix']
+        updated=pdfium.raw.FS_MATRIX(matrix.a,matrix.b,matrix.c,matrix.d,x,baseline-row*size*1.25)
+        if not pdfium.raw.FPDFPageObj_SetMatrix(record['object'],ctypes.byref(updated)):
+            raise MaterialError('Não foi possível posicionar o texto ajustado.')
+    for obj in downstream:obj.transform(pdfium.PdfMatrix(e=0,f=-shift))
 
 
 def structure_edit(source,destination,issue,value):
